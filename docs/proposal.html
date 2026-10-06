@@ -1,0 +1,526 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>OutBrief 方案汇报：AI Agent 来电式语音汇报</title>
+<style>
+:root{--bg:#0f1115;--panel:#171a21;--panel2:#1e222b;--line:#2a2f3a;--text:#e7e9ee;--muted:#9aa3b2;--green:#07c160;--teal:#14b8a6;--amber:#f5a524;--red:#f04438;--blue:#3b82f6;--violet:#8b5cf6}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{margin:0;background:var(--bg);color:var(--text);font:15px/1.7 -apple-system,BlinkMacSystemFont,"PingFang SC","Hiragino Sans GB","Microsoft YaHei","Segoe UI",sans-serif}
+a{color:var(--teal)}
+code{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:.88em;background:#232834;padding:1px 6px;border-radius:4px}
+pre{background:#12151b;border:1px solid var(--line);border-radius:10px;padding:14px 16px;overflow:auto;font-size:13px;line-height:1.55}
+pre code{background:none;padding:0}
+.wrap{max-width:1120px;margin:0 auto;padding:0 24px}
+header.hero{background:radial-gradient(1200px 400px at 20% -10%,rgba(7,193,96,.25),transparent),radial-gradient(900px 400px at 90% 0,rgba(20,184,166,.2),transparent);border-bottom:1px solid var(--line);padding:56px 0 40px}
+.hero h1{font-size:34px;line-height:1.25;margin:0 0 12px}
+.hero p.lead{font-size:17px;color:#c9ced8;max-width:820px;margin:0}
+.meta{margin-top:18px;color:var(--muted);font-size:13px;display:flex;gap:18px;flex-wrap:wrap}
+nav.toc{position:sticky;top:0;z-index:5;background:rgba(15,17,21,.92);backdrop-filter:blur(8px);border-bottom:1px solid var(--line)}
+nav.toc .wrap{display:flex;gap:4px;overflow-x:auto;padding-top:8px;padding-bottom:8px}
+nav.toc a{color:var(--muted);text-decoration:none;font-size:13px;padding:4px 10px;border-radius:999px;white-space:nowrap}
+nav.toc a:hover{background:var(--panel2);color:var(--text)}
+section{padding:44px 0 8px}
+h2{font-size:24px;margin:0 0 6px;display:flex;align-items:center;gap:10px}
+h2 .no{font-size:13px;color:var(--bg);background:var(--green);border-radius:6px;padding:1px 8px}
+h2+p.sub{color:var(--muted);margin:0 0 22px}
+h3{font-size:17px;margin:26px 0 10px}
+.grid{display:grid;gap:16px}
+.g2{grid-template-columns:repeat(auto-fit,minmax(320px,1fr))}
+.g2x{grid-template-columns:repeat(2,1fr)}
+@media(max-width:760px){.g2x{grid-template-columns:1fr}}
+.g3{grid-template-columns:repeat(auto-fit,minmax(260px,1fr))}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:18px 20px}
+.card h4{margin:0 0 8px;font-size:15px}
+.card p,.card li{color:#c9ced8}
+.card ul{margin:6px 0 0;padding-left:18px}
+.tldr{border-left:4px solid var(--green)}
+.tag{display:inline-block;white-space:nowrap;font-size:12px;padding:1px 8px;border-radius:999px;border:1px solid var(--line);color:var(--muted);margin-right:6px}
+.tag.g{color:var(--green);border-color:rgba(7,193,96,.5)}
+.tag.a{color:var(--amber);border-color:rgba(245,165,36,.5)}
+.tag.b{color:var(--blue);border-color:rgba(59,130,246,.5)}
+.tag.r{color:var(--red);border-color:rgba(240,68,56,.5)}
+table{width:100%;border-collapse:collapse;font-size:14px;background:var(--panel);border:1px solid var(--line);border-radius:12px;overflow:hidden}
+th,td{padding:10px 12px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}
+th{background:var(--panel2);color:#cfd4dd;font-weight:600}
+tr:last-child td{border-bottom:none}
+td.k{white-space:nowrap;color:#cfd4dd;font-weight:600}
+.muted{color:var(--muted)}
+.callout{background:rgba(245,165,36,.08);border:1px solid rgba(245,165,36,.35);border-radius:12px;padding:14px 18px;color:#f3e2c2}
+.callout.g{background:rgba(7,193,96,.08);border-color:rgba(7,193,96,.35);color:#cdeedb}
+.diagram{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:12px;overflow:auto}
+.diagram svg{display:block;width:100%;min-width:900px;height:auto}
+/* phone mockups */
+.phones{display:flex;gap:22px;flex-wrap:wrap;justify-content:center}
+.pm{width:236px}
+.pm .cap{text-align:center;color:var(--muted);font-size:13px;margin-top:10px}
+.pm .cap b{color:var(--text);display:block;font-size:14px}
+.phone{height:480px;border-radius:34px;border:8px solid #2b2f38;background:#0b0d10;position:relative;overflow:hidden;box-shadow:0 20px 40px rgba(0,0,0,.45)}
+.phone:before{content:"";position:absolute;top:8px;left:50%;transform:translateX(-50%);width:70px;height:18px;border-radius:12px;background:#000;z-index:3}
+.scr{position:absolute;inset:0;padding:36px 14px 16px;display:flex;flex-direction:column}
+.ring{background:linear-gradient(180deg,#1f3b2e,#0e1512 60%)}
+.avatar{width:74px;height:74px;border-radius:18px;background:linear-gradient(135deg,var(--green),var(--teal));display:grid;place-items:center;font-size:32px;font-weight:700;margin:26px auto 12px;color:#fff}
+.pulse{box-shadow:0 0 0 0 rgba(7,193,96,.6);animation:pulse 1.6s infinite}
+@keyframes pulse{70%{box-shadow:0 0 0 22px rgba(7,193,96,0)}100%{box-shadow:0 0 0 0 rgba(7,193,96,0)}}
+.nm{text-align:center;font-size:18px;font-weight:600}
+.sm{text-align:center;color:var(--muted);font-size:12px}
+.btns{margin-top:auto;display:flex;justify-content:space-around;gap:4px;padding-bottom:6px}
+.btns.four .rb{width:44px;height:44px;font-size:17px}
+.rb{width:54px;height:54px;border-radius:50%;display:grid;place-items:center;font-size:20px;color:#fff}
+.rb.no{background:var(--red)}.rb.yes{background:var(--green)}.rb.grey{background:#343a46}
+.rbl{font-size:11px;color:var(--muted);text-align:center;margin-top:4px}
+.bar{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--muted)}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--green)}
+.slide{background:#161b22;border:1px solid #2a313d;border-radius:12px;padding:10px 12px;margin-top:10px}
+.slide .t{font-size:12px;color:var(--teal);font-weight:600}
+.slide ul{margin:4px 0 0;padding-left:16px;font-size:12px;color:#d6dae2;line-height:1.55}
+.cc{font-size:12px;color:#e7e9ee;background:rgba(255,255,255,.06);border-radius:8px;padding:6px 8px;margin-top:8px;line-height:1.5}
+.cc.me{background:rgba(7,193,96,.16);align-self:flex-end}
+.dots{display:flex;gap:4px;justify-content:center;margin-top:8px}.dots i{width:6px;height:6px;border-radius:50%;background:#3a404c}.dots i.on{background:var(--teal);width:16px;border-radius:3px}
+.inp{margin-top:auto;display:flex;gap:6px;align-items:center}
+.inp .box{flex:1;background:#1c212a;border:1px solid #2d3440;border-radius:18px;padding:7px 10px;font-size:12px;color:var(--muted)}
+.mic{width:34px;height:34px;border-radius:50%;background:var(--green);display:grid;place-items:center;font-size:14px}
+.prompt{background:#11151b;border:1px dashed #3a4250;border-radius:10px;padding:8px 10px;font-size:11px;color:#cfd4dd;font-family:ui-monospace,Menlo,monospace;line-height:1.5;margin-top:8px}
+.btnrow{display:flex;gap:6px;margin-top:10px}.btnrow span{flex:1;text-align:center;font-size:12px;padding:7px 0;border-radius:9px;background:#252b36}.btnrow span.p{background:var(--green);color:#04120a;font-weight:600}
+.qbadge{position:absolute;top:34px;right:12px;background:var(--amber);color:#1a1200;font-size:11px;font-weight:700;border-radius:999px;padding:1px 8px;z-index:4}
+.desk{background:#12151b;border:1px solid var(--line);border-radius:12px;overflow:hidden;max-width:760px;margin:0 auto}
+.desk .tb{height:30px;background:#1b1f27;display:flex;align-items:center;gap:6px;padding:0 12px}.desk .tb i{width:11px;height:11px;border-radius:50%;background:#ff5f57}.desk .tb i:nth-child(2){background:#febc2e}.desk .tb i:nth-child(3){background:#28c840}
+.desk .body{display:grid;grid-template-columns:230px 1fr;min-height:250px}
+.desk .side{border-right:1px solid var(--line);padding:12px}
+.qi{background:var(--panel2);border-radius:9px;padding:8px 10px;margin-bottom:8px;font-size:12px}.qi b{display:block;font-size:13px}.qi.act{outline:1px solid var(--green)}
+.desk .main{padding:14px 18px}
+.toast{position:relative;margin:18px auto 0;max-width:360px;background:#1d222b;border:1px solid #333a47;border-radius:14px;padding:12px 14px;display:flex;align-items:center;gap:12px;box-shadow:0 12px 30px rgba(0,0,0,.4)}
+.toast .av{width:40px;height:40px;border-radius:11px;background:linear-gradient(135deg,var(--green),var(--teal));display:grid;place-items:center;font-weight:700}
+.toast .rb{width:36px;height:36px;font-size:15px}
+ol.steps{counter-reset:s;list-style:none;padding:0;margin:0}
+ol.steps li{counter-increment:s;position:relative;padding:0 0 14px 40px}
+ol.steps li:before{content:counter(s);position:absolute;left:0;top:0;width:26px;height:26px;border-radius:50%;background:var(--panel2);border:1px solid var(--line);display:grid;place-items:center;font-size:12px;color:var(--green)}
+footer{border-top:1px solid var(--line);margin-top:48px;padding:24px 0 40px;color:var(--muted);font-size:13px}
+</style>
+</head>
+<body>
+<header class="hero"><div class="wrap">
+  <div class="tag g">方案汇报 · YOUT-148</div>
+  <h1>OutBrief：AI Agent 干完活，像微信视频一样“打给你”汇报</h1>
+  <p class="lead">把 Agent 冗长的文字结果，转成<strong>真人助理口吻的语音 + 卡片</strong>来电汇报；你随时用说话或打字打断、拍板；挂断时自动生成<strong>下一步提示词</strong>，一键回到原会话继续执行。目标：把“读报告—想决策”的脑力瓶颈从你身上拿走，让你能并行推进多个项目。</p>
+  <div class="meta"><span>日期：2026-09-25</span><span>仓库：<code>outbrief-server</code> · <code>outbrief-app</code> · <code>outbrief-hook</code></span><span>范围：产品形态 · 架构 · 技术选型 · 首期需求 · 项目骨架</span></div>
+</div></header>
+<nav class="toc"><div class="wrap">
+  <a href="#tldr">结论速览</a><a href="#product">1 产品形态</a><a href="#loop">闭环方案</a><a href="#arch">2 系统架构</a><a href="#flow">核心流程</a><a href="#ui">UI 交互</a><a href="#tech">3 技术选型</a><a href="#voice">语音链路</a><a href="#refine">设计细化</a><a href="#p1">4 首期需求</a><a href="#roadmap">路线图</a><a href="#risk">风险</a><a href="#skeleton">项目骨架</a>
+</div></nav>
+<main class="wrap">
+<section id="tldr">
+  <h2>结论速览</h2>
+  <p class="sub">四个讨论点，我的建议先放前面，理由在后面各章。</p>
+  <div class="grid g2x">
+    <div class="card tldr"><h4>① 产品形态</h4><p>一个跨端本地 APP（Win / macOS / Linux / iOS / Android）+ 一个自托管的轻服务端 + 一个 Agent hook 脚本。APP 常驻托盘/后台，Agent 完成任务即“来电”；通话中来的新汇报<strong>自动排队</strong>，挂断后下一个响铃。</p></div>
+    <div class="card tldr"><h4>② 架构方向</h4><p>“<strong>Hook 接入 → 服务端精炼成结构化简报 → 推送来电 → 客户端播报/打断 → 生成提示词 → 回原会话</strong>”。<strong>服务端只做无状态的单轮 LLM 调用</strong>（简报生成、问答、提示词）；<strong>TTS / STT 与对话状态都在客户端</strong>，免费语音通道的限流按用户分摊，服务端只兜底；hook 带回 <code>sessionId</code> + <code>cwd</code>，是后续闭环的关键。</p></div>
+    <div class="card tldr"><h4>③ 技术选型</h4><p>客户端 <strong>Tauri 2 + React 19 + TS</strong>（一套代码五端）；服务端 <strong>Node 22 + Hono + zod</strong>，存储 <strong>MySQL 8</strong>；推送 SSE + 轮询兜底；LLM 调用用 <strong>Vercel AI SDK</strong>（<code>generateObject</code> / <code>streamText</code>）接现有 CLIProxy，不引入 Agent 框架；配音 <strong>Azure 路径 B 在客户端直连</strong>（复用 youtube-dubbing-extension 实现，已在纯网页里实测通过）；语音识别首期同样走 <strong>Azure 路径 B</strong>（客户端直连，与 TTS 共用 token），本地 SenseVoice 作为二期提速选项。</p></div>
+    <div class="card tldr"><h4>④ 首期需求</h4><p>桌面端先跑通完整闭环：Claude Code / Codex 接入 → 简报生成（口播稿 + 卡片 + 决策点）→ 来电/排队 → 客户端 Azure 语音逐句播报 → 点“打字”或按住说话即暂停、问答后续播 → 挂断生成提示词 + “回原会话”命令一键复制。移动端、自动续跑、多用户放二期。</p></div>
+  </div>
+</section>
+
+<section id="product">
+  <h2><span class="no">1</span>产品形态</h2>
+  <p class="sub">核心不是“把报告念出来”，而是“替你把报告消化成可决策的信息”。</p>
+  <div class="grid g3">
+    <div class="card"><h4>📞 来电，而不是通知</h4><p>完成事件以全屏来电/置前窗口出现，显示 Agent、项目、一句话结论和“需要你决策 N 项”。可接听、拒绝（稍后在列表回看）、静音排队。</p></div>
+    <div class="card"><h4>🗣️ 真人助理口吻</h4><p>先结论后细节：“老板，登录重构做完了，测试全过；有一件事要你拍板……”。原文事实被抽成<strong>事实清单</strong>，口播稿每段标注覆盖了哪些事实，服务端校验关键事实（风险、决策、数字、未完成项）<strong>零遗漏</strong>。</p></div>
+    <div class="card"><h4>🖼️ 卡片配图</h4><p>每段口播对应一张卡片：总结 / 改动清单 / 风险 / 决策点（带选项与推荐）/ 下一步。卡片随语音翻页，手动翻页也会跳到对应语音段。</p></div>
+    <div class="card"><h4>✋ 随时打断</h4><p>按住说话或直接打字即暂停播报；助理基于原始报告 + 已播内容回答或记下你的意见，然后问“要我继续吗？”，从断点继续。决策点可直接点选项回答。</p></div>
+    <div class="card"><h4>📋 挂断即出提示词</h4><p>通话结束，把“原报告 + 你的所有意见/决策”合成一段可直接粘贴给 Agent 的提示词，同时给出回到原会话的命令（如 <code>claude --resume &lt;id&gt;</code>），可复制、可编辑。</p></div>
+    <div class="card"><h4>🧵 排队与回看</h4><p>通话中来的新事件自动进队列，角标显示“还有 N 个汇报在排队”；挂断后自动响下一个。所有汇报、对话记录、提示词可在历史里回看重播。</p></div>
+  </div>
+</section>
+
+<section id="loop">
+  <h2>闭环方案：怎么“回到之前的 session”？</h2>
+  <p class="sub">你提到的难点：对话完自动执行只能开新 CLI，回不到原会话；另一个想法是干脆做一个类 Multica 的完整工具。</p>
+  <p>好消息是主流 Agent CLI 都支持<strong>按会话 ID 恢复并追加指令</strong>，而 hook 恰好能拿到这个 ID，所以不需要先重造一个 Multica：</p>
+  <table>
+    <tr><th>Agent</th><th>hook 给到的标识</th><th>交互式回到原会话</th><th>无人值守续跑（二期）</th></tr>
+    <tr><td class="k">Claude Code</td><td><code>Stop</code> hook stdin：<code>session_id</code>、<code>cwd</code>、<code>last_assistant_message</code></td><td><code>cd &lt;cwd&gt; &amp;&amp; claude --resume &lt;session_id&gt;</code></td><td><code>claude -p --resume &lt;session_id&gt; "&lt;prompt&gt;"</code></td></tr>
+    <tr><td class="k">Codex</td><td><code>notify</code> 参数 JSON：<code>thread-id</code>、<code>cwd</code>、<code>last-assistant-message</code></td><td><code>codex resume &lt;thread-id&gt;</code></td><td><code>codex exec resume &lt;thread-id&gt; "&lt;prompt&gt;"</code></td></tr>
+    <tr><td class="k">其他 / 自研</td><td><code>POST /v1/events</code>（generic）</td><td>展示提示词，人工粘贴</td><td>回调 URL（由接入方实现）</td></tr>
+  </table>
+  <h3>分三级演进，由浅入深</h3>
+  <div class="grid g3">
+    <div class="card"><span class="tag g">首期</span><h4>L1 复制即用</h4><p>挂断页给出：① 提示词 ② “回原会话”命令（已拼好 <code>cwd</code> 与会话 ID）。你粘贴即继续，零风险，所有 Agent 通用。</p></div>
+    <div class="card"><span class="tag b">二期</span><h4>L2 一键续跑</h4><p>桌面端增加本地 <strong>Runner</strong>：点“让它继续”，在原 <code>cwd</code> 执行 <code>claude -p --resume</code> / <code>codex exec resume</code>。续跑结束又触发 hook → 再次来电，形成真正闭环。需要白名单目录与确认弹窗。</p></div>
+    <div class="card"><span class="tag a">三期（可选）</span><h4>L3 任务编排</h4><p>当你需要同时管多个项目的队列、看板、多 Agent 分工时，再在 Runner 之上加任务层——即你说的“类 Multica”。先有 L1/L2 验证价值，再决定是否值得做，或直接对接 Multica。</p></div>
+  </div>
+  <p class="callout g" style="margin-top:16px">建议：<strong>首期做 L1，架构上为 L2 预留</strong>（事件已存 <code>source</code>/<code>sessionId</code>/<code>cwd</code>，骨架里已实现）。不建议一上来做完整编排工具——工作量大一个数量级，而核心痛点（读报告、做决策）在 L1 就已被解决。</p>
+</section>
+<section id="arch">
+  <h2><span class="no">2</span>系统架构</h2>
+  <p class="sub">三个部件：Agent 侧 hook、自托管服务端、跨端客户端。实线 = 首期，虚线 = 二期。</p>
+  <div class="diagram">
+  <svg viewBox="0 0 1100 585" xmlns="http://www.w3.org/2000/svg" font-family="-apple-system,PingFang SC,Microsoft YaHei,sans-serif">
+    <defs>
+      <marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0L10,5L0,10z" fill="#9aa3b2"/></marker>
+      <marker id="arg" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0L10,5L0,10z" fill="#07c160"/></marker>
+    </defs>
+    <!-- zones -->
+    <rect x="10" y="20" width="230" height="440" rx="14" fill="#141820" stroke="#2a2f3a"/>
+    <text x="26" y="46" fill="#9aa3b2" font-size="13">开发机 · Agent 侧</text>
+    <rect x="300" y="20" width="470" height="520" rx="14" fill="#141820" stroke="#2a2f3a"/>
+    <text x="316" y="46" fill="#9aa3b2" font-size="13">OutBrief Server（Node 22 + Hono，自托管）</text>
+    <rect x="830" y="20" width="260" height="440" rx="14" fill="#141820" stroke="#2a2f3a"/>
+    <text x="846" y="46" fill="#9aa3b2" font-size="13">客户端（Tauri 2 + React）</text>
+    <!-- agents -->
+    <g font-size="13" fill="#e7e9ee">
+      <rect x="30" y="64" width="190" height="36" rx="8" fill="#1e222b" stroke="#3a404c"/><text x="46" y="87">Claude Code · Stop hook</text>
+      <rect x="30" y="108" width="190" height="36" rx="8" fill="#1e222b" stroke="#3a404c"/><text x="46" y="131">Codex · notify</text>
+      <rect x="30" y="152" width="190" height="36" rx="8" fill="#1e222b" stroke="#3a404c"/><text x="46" y="175">Gemini CLI / 其他</text>
+      <rect x="30" y="226" width="190" height="62" rx="10" fill="#10261b" stroke="#07c160"/><text x="46" y="252" font-weight="600">outbrief-hook</text><text x="46" y="274" fill="#9aa3b2" font-size="12">归一化 · 失败恒 exit 0</text>
+      <rect x="30" y="376" width="190" height="62" rx="10" fill="#1e222b" stroke="#3b82f6" stroke-dasharray="6 4"/><text x="46" y="402" font-weight="600">Local Runner（二期）</text><text x="46" y="424" fill="#9aa3b2" font-size="12">resume 原会话续跑</text>
+    </g>
+    <path d="M125 188 V222" stroke="#9aa3b2" stroke-width="1.6" marker-end="url(#ar)"/>
+    <!-- server blocks -->
+    <g font-size="13" fill="#e7e9ee">
+      <rect x="320" y="64" width="200" height="56" rx="10" fill="#1e222b" stroke="#3a404c"/><text x="336" y="88" font-weight="600">Ingest API</text><text x="336" y="108" fill="#9aa3b2" font-size="12">POST /v1/events · Bearer</text>
+      <rect x="550" y="64" width="200" height="56" rx="10" fill="#1e222b" stroke="#3a404c"/><text x="566" y="88" font-weight="600">Event Store</text><text x="566" y="108" fill="#9aa3b2" font-size="12">MySQL 8 · seq 自增</text>
+      <rect x="320" y="150" width="200" height="74" rx="10" fill="#1d1a2e" stroke="#8b5cf6"/><text x="336" y="174" font-weight="600">Brief Engine</text><text x="336" y="194" fill="#9aa3b2" font-size="12">事实抽取 → 口播段 + 卡片</text><text x="336" y="212" fill="#9aa3b2" font-size="12">单次结构化调用 · 覆盖校验</text>
+      <rect x="550" y="150" width="200" height="74" rx="10" fill="#10222a" stroke="#14b8a6" stroke-dasharray="6 4"/><text x="566" y="174" font-weight="600">Voice Fallback（兜底）</text><text x="566" y="194" fill="#9aa3b2" font-size="12">客户端合成失败时代合成</text><text x="566" y="212" fill="#9aa3b2" font-size="12">官方 Speech Key · 限额</text>
+      <rect x="320" y="254" width="200" height="74" rx="10" fill="#1d1a2e" stroke="#8b5cf6"/><text x="336" y="278" font-weight="600">LLM Gateway（无状态）</text><text x="336" y="298" fill="#9aa3b2" font-size="12">问答 / 提示词 · 单轮流式</text><text x="336" y="316" fill="#9aa3b2" font-size="12">鉴权 · 限额 · 提示词模板</text>
+      <rect x="550" y="254" width="200" height="74" rx="10" fill="#10261b" stroke="#07c160"/><text x="566" y="278" font-weight="600">Delivery</text><text x="566" y="298" fill="#9aa3b2" font-size="12">SSE /v1/stream · 断线续传</text><text x="566" y="316" fill="#9aa3b2" font-size="12">轮询兜底 · APNs/FCM（二期）</text>
+      <rect x="320" y="358" width="430" height="44" rx="10" fill="#1e222b" stroke="#3a404c"/><text x="336" y="385">Auth（设备 token）· 配置（音色/语速/模型）· 历史与回放</text>
+      <rect x="320" y="440" width="200" height="80" rx="10" fill="#171a21" stroke="#3a404c" stroke-dasharray="4 3"/><text x="336" y="466" font-weight="600">LLM（CLIProxy）</text><text x="336" y="486" fill="#9aa3b2" font-size="12">OpenAI 兼容 · 可切模型</text><text x="336" y="504" fill="#9aa3b2" font-size="12">gemini-3.6-flash 等</text>
+      <rect x="550" y="440" width="200" height="80" rx="10" fill="#171a21" stroke="#3a404c" stroke-dasharray="4 3"/><text x="566" y="466" font-weight="600">Azure Speech</text><text x="566" y="486" fill="#9aa3b2" font-size="12">路径 B 免费签名 JWT</text><text x="566" y="504" fill="#9aa3b2" font-size="12">可切官方 Key</text>
+    </g>
+    <!-- clients -->
+    <g font-size="13" fill="#e7e9ee">
+      <rect x="850" y="64" width="220" height="110" rx="12" fill="#1e222b" stroke="#07c160"/><text x="866" y="90" font-weight="600">桌面端（首期）</text><text x="866" y="112" fill="#9aa3b2" font-size="12">Windows · macOS · Linux</text><text x="866" y="132" fill="#9aa3b2" font-size="12">托盘常驻 · 来电置前</text><text x="866" y="152" fill="#9aa3b2" font-size="12">来电队列 · 播放器 · 麦克风</text>
+      <rect x="850" y="194" width="220" height="110" rx="12" fill="#1e222b" stroke="#3b82f6" stroke-dasharray="6 4"/><text x="866" y="220" font-weight="600">移动端（二期）</text><text x="866" y="242" fill="#9aa3b2" font-size="12">iOS · Android（同一代码）</text><text x="866" y="262" fill="#9aa3b2" font-size="12">CallKit / 全屏来电通知</text><text x="866" y="282" fill="#9aa3b2" font-size="12">推送唤醒</text>
+      <rect x="850" y="324" width="220" height="110" rx="12" fill="#1e222b" stroke="#3a404c"/><text x="866" y="350" font-weight="600">客户端核心（本地运行）</text><text x="866" y="372" fill="#9aa3b2" font-size="12">来电队列 · 通话/打断状态机</text><text x="866" y="392" fill="#9aa3b2" font-size="12">Voice：Azure TTS · Azure STT</text><text x="866" y="412" fill="#9aa3b2" font-size="12">对话上下文 → LLM Gateway</text>
+    </g>
+    <!-- arrows -->
+    <g stroke-width="1.8" fill="none">
+      <path d="M220 257 C270 257 270 92 316 92" stroke="#07c160" marker-end="url(#arg)"/>
+      <path d="M520 92 H546" stroke="#9aa3b2" marker-end="url(#ar)"/>
+      <path d="M650 120 V132 H420 V146" stroke="#9aa3b2" marker-end="url(#ar)"/>
+      <path d="M520 187 H546" stroke="#9aa3b2" marker-end="url(#ar)"/>
+      <path d="M420 224 V250" stroke="#9aa3b2" marker-end="url(#ar)"/>
+      <path d="M520 291 H546" stroke="#9aa3b2" marker-end="url(#ar)"/>
+      <path d="M420 402 V436" stroke="#9aa3b2" stroke-dasharray="4 3" marker-end="url(#ar)"/>
+      <path d="M650 224 V238 H760 V436 H754" stroke="#9aa3b2" stroke-dasharray="4 3" marker-end="url(#ar)"/>
+      <path d="M750 291 C800 291 800 119 846 119" stroke="#07c160" marker-end="url(#arg)"/>
+      <path d="M750 291 C800 291 800 249 846 249" stroke="#3b82f6" stroke-dasharray="6 4" marker-end="url(#ar)"/>
+      <path d="M960 434 V554 H250 V407 H224" stroke="#3b82f6" stroke-dasharray="6 4" marker-end="url(#ar)"/>
+      <path d="M125 376 V292" stroke="#3b82f6" stroke-dasharray="6 4" marker-end="url(#ar)"/>
+      <path d="M850 404 H800 V480 H754" stroke="#07c160" marker-end="url(#arg)"/>
+    </g>
+    <g font-size="11" fill="#9aa3b2">
+      <text x="236" y="170">HTTPS 事件</text>
+      <text x="786" y="200">SSE 推送</text>
+      <text x="806" y="500" fill="#07c160">客户端直连</text>
+      <text x="420" y="572" fill="#3b82f6">“让它继续” → Runner → resume → 再次触发 hook（二期闭环）</text>
+    </g>
+  </svg>
+  </div>
+  <div class="grid g3" style="margin-top:16px">
+    <div class="card"><h4>服务端 / 客户端怎么分工</h4><ul><li>服务端：简报生成（事件到达时你可能不在线）、LLM 凭据与限额；<b>不保存会话、不跑循环</b></li><li>客户端：TTS / STT、对话上下文、打断与续播——免费语音通道的限流按用户 IP 分摊</li><li>服务端每次调用都是无状态单轮；Node 异步 I/O 下等模型返回不占线程</li></ul></div>
+    <div class="card"><h4>为什么 SSE + 轮询兜底</h4><ul><li>你提的“轮询”完全可用，但 SSE 秒级到达且更省</li><li>事件带单调 <code>seq</code>，断线用 <code>Last-Event-ID</code> 续传，不丢不重</li><li>后台/休眠的手机靠 APNs/FCM 唤醒（二期）</li></ul></div>
+    <div class="card"><h4>为什么先单用户自托管</h4><ul><li>报告含代码与业务信息，默认私有部署</li><li>MySQL 8：本机 docker 已有实例，与现有项目运维方式一致；表结构走版本化迁移（<code>db/migrations</code>），访问集中在 <code>EventStore</code></li><li>多租户/账号体系放到有外部用户时再做</li></ul></div>
+  </div>
+</section>
+<section id="flow">
+  <h2>核心流程</h2>
+  <p class="sub">一次汇报从 Agent 结束到你拿到提示词的完整路径。</p>
+  <div class="grid g2">
+    <div class="card">
+      <ol class="steps">
+        <li><b>Agent 完成</b>：Claude Code <code>Stop</code> / Codex <code>notify</code> 触发 <code>outbrief-hook</code>，带上最终报告、<code>sessionId</code>、<code>cwd</code>。</li>
+        <li><b>入库</b>：<code>POST /v1/events</code> → 分配 <code>seq</code>，状态 <code>received</code>；异步进入简报生成。</li>
+        <li><b>精炼</b>：Brief Engine 先抽事实清单（数字/风险/决策/未完成项标为关键），再写口播段 + 卡片，校验“关键事实全部被覆盖”，未覆盖则重写一次或以“补充说明”卡片兜底。整个过程是<b>一次结构化 LLM 调用 + 代码校验</b>，不是 Agent。</li>
+        <li><b>配音</b>：客户端收到简报后直连 Azure 按句合成并本地缓存；首句就绪即响铃，后续边播边合成；客户端失败才请求服务端兜底。</li>
+        <li><b>来电</b>：SSE 推送到所有在线客户端；空闲则响铃，通话中则排队。</li>
+        <li><b>播报 + 打断</b>：逐句播放、卡片同步；点“打字”或按住说话立即暂停，Azure STT 识别语音后把问题连同上下文发给 LLM Gateway，回答播完后“继续”从当前句开头接着讲。</li>
+        <li><b>挂断</b>：生成“下一步提示词”+ 回原会话命令；状态写回 <code>completed</code>，队列里的下一个响铃。</li>
+      </ol>
+    </div>
+    <div class="card">
+      <h4>简报结构（服务端产出，客户端渲染）</h4>
+<pre><code>{
+  "title": "登录模块重构汇报",
+  "verdict": "partial",          // done | partial | blocked
+  "facts": [{ "id": "f-redis", "text": "Session 迁到 Redis，需新增 REDIS_URL",
+              "importance": "critical" }],
+  "segments": [{
+    "id": "seg-1",
+    "speech": "老板，登录重构做完了，42 个测试全过。有两件事要你拍板……",
+    "card": { "kind": "summary", "title": "总体进展",
+              "bullets": ["JWT 校验换成 jose", "42/42 测试通过"] },
+    "coveredFactIds": ["f-jwt", "f-tests"]
+  }],
+  "decisions": [{ "id": "d-legacy", "question": "旧接口立即下线还是保留一个版本？",
+                  "options": ["保留到 v2.3", "立即下线"], "recommendation": "保留到 v2.3" }]
+}</code></pre>
+      <p class="muted" style="font-size:13px">已用真实报告在 CLIProxy 上跑通该结构（<code>gemini-3.6-flash-high</code> 约 5.6 s，事实全覆盖、未覆盖列表为空），口播稿长度约为原文 1/3～3/5。</p>
+    </div>
+  </div>
+</section>
+
+<section id="ui">
+  <h2>UI 交互设计</h2>
+  <p class="sub">视觉语言对齐微信视频来电：深色全屏、绿色接听、红色挂断；通话中是“语音为主、卡片为辅”。</p>
+  <div class="phones">
+    <div class="pm"><div class="phone"><div class="scr ring">
+      <div class="avatar pulse">C</div>
+      <div class="nm">Claude Code</div>
+      <div class="sm">outbrief · 邀请你语音通话</div>
+      <div class="slide" style="margin-top:22px"><div class="t">一句话</div><ul style="list-style:none;padding:0"><li>登录重构完成，42 项测试通过；<b style="color:var(--amber)">2 项待你决策</b></li></ul></div>
+      <div class="btns"><div><div class="rb no">✕</div><div class="rbl">拒绝</div></div><div><div class="rb yes">✆</div><div class="rbl">接听</div></div></div>
+    </div></div><div class="cap"><b>① 来电</b>结论 + 待决策数先亮出来，决定接不接</div></div>
+
+    <div class="pm"><div class="phone"><div class="qbadge">排队 2</div><div class="scr">
+      <div class="bar"><span class="dot"></span>Claude Code · outbrief · 01:12</div>
+      <div class="slide"><div class="t">改动与风险 2/4</div><ul><li>Session 迁至 Redis</li><li>需新增 <code>REDIS_URL</code></li><li style="color:var(--amber)">生产 Redis 尚未开通</li></ul></div>
+      <div class="dots"><i></i><i class="on"></i><i></i><i></i></div>
+      <div class="cc">“Session 已经迁到 Redis 了，不过生产环境的 Redis 还没开……”</div>
+      <div class="btns four"><div><div class="rb grey">⏸</div><div class="rbl">暂停</div></div><div><div class="rb grey">⌨</div><div class="rbl">打字</div></div><div><div class="rb yes">🎙</div><div class="rbl">按住说话</div></div><div><div class="rb no">✕</div><div class="rbl">挂断</div></div></div>
+    </div></div><div class="cap"><b>② 通话中</b>语音逐段播，卡片同步翻；右上角是排队数</div></div>
+
+    <div class="pm"><div class="phone"><div class="scr">
+      <div class="bar"><span class="dot" style="background:var(--amber)"></span>已暂停 · 你在打断</div>
+      <div class="slide"><div class="t">决策 1/2</div><ul style="list-style:none;padding:0"><li>旧接口立即下线还是保留一个版本？</li></ul><div class="btnrow"><span class="p">保留到 v2.3（推荐）</span><span>立即下线</span></div></div>
+      <div class="cc me">Redis 让运维用 Terraform 开，你先把配置写进文档</div>
+      <div class="cc">好的，记下了：生产 Redis 由运维 Terraform 开通，我在下一步里补文档。要我继续讲吗？</div>
+      <div class="inp"><div class="box">继续 / 输入你的意见…</div><div class="mic">🎙</div></div>
+    </div></div><div class="cap"><b>③ 打断</b>说话或打字都会暂停；决策点可直接点选</div></div>
+
+    <div class="pm"><div class="phone"><div class="scr">
+      <div class="bar"><span class="dot" style="background:#6b7280"></span>通话结束 · 04:36</div>
+      <div class="slide"><div class="t">下一步提示词</div></div>
+      <div class="prompt">继续登录模块重构收尾：<br>1. 旧接口保留到 v2.3，加 Deprecation 头；<br>2. 在 docs/deploy.md 补 REDIS_URL 配置说明，生产 Redis 由运维 Terraform 开通；<br>3. 完成后跑全量测试并汇报。</div>
+      <div class="prompt" style="border-style:solid;color:var(--teal)">cd ~/work/outbrief &amp;&amp; claude --resume 9b08d75a…</div>
+      <div class="btnrow"><span>编辑</span><span class="p">复制提示词</span></div>
+      <div class="btnrow" style="margin-top:6px"><span>复制命令</span><span style="opacity:.55">让它继续（二期）</span></div>
+    </div></div><div class="cap"><b>④ 挂断</b>提示词 + 回原会话命令，一键复制</div></div>
+  </div>
+
+  <h3>桌面端：托盘常驻 + 来电浮窗 + 队列</h3>
+  <div class="desk">
+    <div class="tb"><i></i><i></i><i></i><span class="muted" style="font-size:12px;margin-left:8px">OutBrief</span></div>
+    <div class="body">
+      <div class="side">
+        <div class="muted" style="font-size:12px;margin-bottom:8px">通话中 / 排队</div>
+        <div class="qi act"><b>Claude Code · outbrief</b><span class="muted">通话中 · 2/4</span></div>
+        <div class="qi"><b>Codex · api</b><span class="muted">排队 #1 · 2 分钟前</span></div>
+        <div class="qi"><b>Gemini CLI · web</b><span class="muted">排队 #2 · 刚刚</span></div>
+        <div class="muted" style="font-size:12px;margin:14px 0 8px">历史</div>
+        <div class="qi" style="opacity:.7"><b>Codex · data-sync</b><span class="muted">已完成 · 提示词已复制</span></div>
+      </div>
+      <div class="main">
+        <div class="slide" style="margin-top:0"><div class="t">改动与风险 2/4</div><ul><li>Session 存储迁到 Redis，新增 <code>REDIS_URL</code></li><li>API 文档新增 3 个接口说明</li><li style="color:var(--amber)">生产 Redis 尚未开通 —— 需要决策</li></ul></div>
+        <div class="cc" style="max-width:520px">“Session 已经迁到 Redis 了，不过生产环境的 Redis 还没开……”</div>
+        <div class="inp" style="margin-top:16px"><div class="box">空格 = 按住说话 · 直接输入 = 打字打断 · Esc = 挂断</div><div class="mic">🎙</div></div>
+      </div>
+    </div>
+  </div>
+  <div class="toast"><div class="av">X</div><div style="flex:1"><b style="font-size:14px">Codex · api</b><div class="muted" style="font-size:12px">邀请你语音通话 · 任务汇报</div></div><div class="rb no">✕</div><div class="rb yes">✆</div></div>
+  <p class="muted" style="text-align:center;font-size:13px;margin-top:8px">空闲时来电：窗口置前 + 系统级“请求注意”（Dock 跳动 / 任务栏闪烁）；移动端二期用 CallKit / 全屏通知。</p>
+</section>
+<section id="tech">
+  <h2><span class="no">3</span>技术选型</h2>
+  <p class="sub">原则：一套 TS 类型贯穿三端；能复用现有资产就复用；首期零运维。</p>
+  <table>
+    <tr><th>层</th><th>选择</th><th>理由</th><th>备选 / 放弃原因</th></tr>
+    <tr><td class="k">客户端框架</td><td><b>Tauri 2</b> + React 19 + TypeScript + Vite</td><td>一套代码覆盖 Win/macOS/Linux/iOS/Android；包体小（~10 MB 级）；原生能力用 Rust 或 Swift/Kotlin 插件补</td><td>Electron 无移动端；Flutter 与现有 TS 资产割裂；RN 桌面（尤其 Linux）弱</td></tr>
+    <tr><td class="k">客户端状态</td><td>纯函数 <code>callQueue</code> 状态机 + React state</td><td>来电/排队/挂断逻辑可单测，与 UI 解耦，移动端直接复用</td><td>首期不引入 Redux/Zustand</td></tr>
+    <tr><td class="k">音频</td><td>WebView <code>HTMLAudioElement</code> / Web Audio；<code>MediaRecorder</code> 录音</td><td>按句 MP3 顺序播放、随时暂停；录音转 16 kHz WAV 交给 Azure STT</td><td>移动端后台播放二期用原生插件</td></tr>
+    <tr><td class="k">服务端</td><td><b>Node 22 + Hono</b> + zod</td><td>协议以服务端 <code>src/protocol.ts</code>（zod）为准，客户端 / hook 各自镜像类型；Hono 自带 SSE；Node 22 原生跑 TS，无构建</td><td>Spring Boot 同现有 proxy 栈，但无法共享类型、无法直接复用 TS 版 TTS</td></tr>
+    <tr><td class="k">存储</td><td><b>MySQL 8</b>（<code>mysql2</code>）+ 版本化 SQL 迁移</td><td>本机 docker 已有 MySQL，与现有项目一致；启动时自动迁移；访问集中在 <code>EventStore</code></td><td>SQLite：部署到服务器后要单独管文件与备份；Redis 首期不需要</td></tr>
+    <tr><td class="k">下发</td><td><b>SSE</b>（fetch 流，带 Authorization）+ <code>Last-Event-ID</code> + 轮询兜底</td><td>秒级到达、服务端实现简单、天然续传</td><td>WebSocket 双向能力首期用不上；APNs/FCM 二期</td></tr>
+    <tr><td class="k">LLM</td><td>现有 <b>CLIProxy</b>（OpenAI 兼容），默认 <code>gemini-3.6-flash-high</code>，可配置</td><td>已有账号与额度；JSON 结构化输出实测可用；模型可随时切</td><td>直连各家 SDK：多一套 key 管理</td></tr>
+    <tr><td class="k">LLM 调用</td><td><b>Vercel AI SDK</b>：<code>ai</code> + <code>@ai-sdk/openai-compatible</code>；简报 <code>generateObject</code>（zod schema），问答 / 提示词 <code>streamText</code></td><td>三类调用都是单轮，不需要 Agent 框架；schema 放服务端，客户端镜像类型；同一套 API 在 Node 和 WebView 都能跑</td><td>LangChain / LangGraph / Mastra：解决的是多步工具循环，这里用不上，徒增抽象</td></tr>
+    <tr><td class="k">TTS</td><td><b>Azure 路径 B，客户端直连</b>（同 youtube-dubbing-extension：前端做、后端兜底）</td><td>零成本、音色丰富；限流按用户 IP 分摊；已在纯网页实测（CORS 放行 <code>*</code>）</td><td>服务端官方 Speech Key 作兜底</td></tr>
+    <tr><td class="k">STT</td><td>首期 <b>Azure 路径 B STT，客户端直连</b>（与 TTS 共用签名 / token）</td><td>免费、零安装、实现与 TTS 同一套；实测 11.3 s 音频往返 4.5 s</td><td>本地 SenseVoice（0.18 s，但要带 240 MB 模型和 sherpa-onnx 原生依赖）放二期；Web Speech API 在 WebView2 / WebKitGTK 上不可用</td></tr>
+    <tr><td class="k">Hook</td><td>零依赖 Node 脚本 <code>outbrief-hook</code></td><td>装在任何开发机都能跑；超时短、失败 <code>exit 0</code> 永不阻塞 Agent</td><td>Rust 单文件二进制：二期做分发时再考虑</td></tr>
+    <tr><td class="k">工程</td><td>三个独立仓库（server / app / hook）· pnpm · Biome · Vitest · GitHub Actions</td><td>每个仓库一条命令 lint/typecheck/test；server CI 带 MySQL 服务；app CI 覆盖三平台 Tauri 构建</td><td>ESLint+Prettier：配置更重</td></tr>
+  </table>
+</section>
+
+<section id="voice">
+  <h2>语音链路（参考 youtube-dubbing-extension）</h2>
+  <p class="sub">扩展里的 <code>src/background/api/edge-tts/*</code> 已是纯 TS + WebCrypto 实现，移植到客户端 <code>outbrief-app/src/voice/</code>（WebView 直接 <code>fetch</code>）；服务端兜底改用官方 Speech Key 的标准 REST，不需要共享代码。</p>
+  <div class="grid g2">
+    <div class="card"><h4>协议（路径 B：cognitiveservices/v1）</h4><ol class="steps">
+      <li>HMAC-SHA256 签名（<code>MSTranslatorAndroidApp</code>）→ <code>X-MT-Signature</code></li>
+      <li><code>POST dev.microsofttranslator.com/apps/endpoint</code> 换取 JWT + region（时钟偏差时用服务器时间重签）</li>
+      <li>TTS：<code>POST https://{region}.tts.speech.microsoft.com/cognitiveservices/v1</code>，SSML（<code>voice</code> / <code>prosody</code> / <code>lang</code>），输出 <code>audio-24khz-48kbitrate-mono-mp3</code></li>
+      <li>STT：同一 JWT 调 <code>{region}.stt.speech.microsoft.com/…/conversation/cognitiveservices/v1</code>，16 kHz WAV</li>
+      <li>错误策略沿用扩展：400 不重试、401 刷新 token、429 立即降级、408/5xx 指数退避；并发 ≤ 3</li>
+      <li><b>WebView 里必须加 <code>referrerPolicy: "no-referrer"</code></b>：换 token 的接口带任何 Referer 都会 401（错误码 401001），浏览器默认会带；扩展的后台 Service Worker 不带所以没遇到</li>
+    </ol></div>
+    <div class="card"><h4>实测（spike）</h4>
+      <table>
+        <tr><th>场景</th><th>结果</th></tr>
+        <tr><td>Node 22：签名换 JWT</td><td>200，region <code>eastasia</code>，~0.2 s</td></tr>
+        <tr><td>Node 22：TTS（中文约 11 s 语音）</td><td>200，<code>audio/mpeg</code> 68 KB，~2.6 s</td></tr>
+        <tr><td><b>纯网页（Chromium，无扩展、无代理）</b>：签名 → JWT → TTS → STT</td><td>全部 200；TTS 5.6 s 语音耗时 1.9 s；STT 11.3 s 音频往返 4.5 s</td></tr>
+        <tr><td>CORS 预检（<code>tauri://localhost</code>、<code>http://tauri.localhost</code>）</td><td>三个接口都返回 <code>Access-Control-Allow-Origin: *</code> 并放行所需请求头</td></tr>
+        <tr><td><b>本地 SenseVoice-Small int8</b>（M4 Max CPU，2 线程）</td><td>模型 240 MB，加载 0.43 s；11.3 s 音频识别 0.18 s（RTF 0.016）</td></tr>
+      </table>
+      <p class="muted" style="font-size:13px;margin-top:10px">含义：TTS 放客户端没有技术障碍，WebView 里直接 <code>fetch</code> 即可，不需要 Rust 转发；STT 同理，客户端直连即可。</p>
+    </div>
+  </div>
+  <p class="callout" style="margin-top:16px">风险提示：路径 B 是非官方通道，可能被限流或封禁。客户端直连把限流分摊到每个用户；服务端配置 <code>AZURE_SPEECH_KEY</code> 后作为兜底走官方 Speech 服务（同一 SSML、同一端点形态），上层无感。</p>
+</section>
+<section id="refine">
+  <h2>设计细化（讨论补充）</h2>
+  <p class="sub">针对五个追问：要不要 Agent、TTS 放哪、Agent 循环放哪、怎么打断、语音识别用什么。</p>
+
+  <h3>① 把汇报转成图文简报，要不要 Agent？——不要，一次结构化调用就够</h3>
+  <div class="grid g2">
+    <div class="card"><h4>结论</h4><p>这是一个<strong>输入固定、输出结构固定</strong>的变换，没有“先看结果再决定下一步调什么工具”的环节，所以不需要 Agent，直接调大模型 API：</p><ol class="steps">
+      <li>一次 <code>generateObject</code>：输入原始报告，输出 zod 定义的简报（事实清单 / 口播段 / 卡片 / 决策点）</li>
+      <li>代码校验：zod 结构 + “<code>critical</code> 事实全部被某段覆盖”</li>
+      <li>不合格才补一次调用（把缺失事实回传让它改）；仍不合格就追加“补充说明”卡片</li>
+    </ol><p class="muted" style="font-size:13px">实测一次调用约 5.6 s，事实全覆盖。简报在服务端生成：事件到达时你可能不在线，接起电话时应该已经准备好。</p></div>
+    <div class="card"><h4>技术栈</h4><table>
+      <tr><th>用途</th><th>选择</th></tr>
+      <tr><td>模型调用</td><td><code>ai</code>（Vercel AI SDK Core）+ <code>@ai-sdk/openai-compatible</code> 指向 CLIProxy</td></tr>
+      <tr><td>结构化输出</td><td><code>generateObject({ schema })</code>，schema 放服务端 <code>src/protocol.ts</code>，客户端镜像类型</td></tr>
+      <tr><td>问答 / 提示词</td><td><code>streamText</code>，流式返回，首句到了就先合成先播</td></tr>
+      <tr><td>提示词管理</td><td>模板文件 + 版本号，放服务端；用固定样本做回归评测</td></tr>
+    </table><p class="muted" style="font-size:13px">不用 LangChain / LangGraph / Mastra：它们解决多步工具循环、状态持久化，这里没有这些需求。</p></div>
+  </div>
+
+  <h3>② TTS 能不能放客户端？——能，已验证，采用“前端做、后端兜底”</h3>
+  <div class="grid g2">
+    <div class="card"><h4>验证结果</h4><ul>
+      <li>在普通网页（非扩展）里用 WebCrypto 签名 → 换 JWT → TTS → STT，<b>全部 200</b>，MP3 能直接播放</li>
+      <li>三个接口的 CORS 对 Tauri 的两种 origin 都返回 <code>Access-Control-Allow-Origin: *</code>，WebView 直接 <code>fetch</code> 即可，不需要 Rust 转发</li>
+      <li>唯一的坑：换 token 的接口<b>只要带 Referer 就 401</b>，浏览器默认会带 → 请求加 <code>referrerPolicy: "no-referrer"</code></li>
+    </ul></div>
+    <div class="card"><h4>落地方式</h4><ul>
+      <li>把扩展的 <code>edge-tts/*</code> 移植到 <code>outbrief-app/src/voice/</code>（签名、token 缓存、SSML、重试、合成、识别）</li>
+      <li>客户端：按句合成，按“文本 + 音色 + 语速”哈希缓存在本地，重听不再请求</li>
+      <li>服务端：<code>POST /v1/tts</code> 只在客户端连续失败时调用，用官方 <code>AZURE_SPEECH_KEY</code>，按用户限额</li>
+      <li>效果：免费通道的限流落在每个用户自己的 IP 上，服务器不成瓶颈</li>
+    </ul></div>
+  </div>
+
+  <h3>③ 多轮交互时 Agent 放哪？——循环放客户端，服务端只做无状态单轮</h3>
+  <div class="grid g2">
+    <div class="card"><h4>业界做法</h4><ul>
+      <li><b>Vercel AI SDK 客户端工具</b>：服务端每次请求只跑一步 <code>streamText</code>；没有 <code>execute</code> 的工具调用下发到前端 <code>onToolCall</code> 执行，<code>addToolOutput</code> 写回结果，<code>sendAutomaticallyWhen: lastAssistantMessageIsCompleteWithToolCalls</code> 自动发起下一轮——<b>循环由前端驱动</b>，服务端不保存状态</li>
+      <li><b>OpenAI Agents SDK（语音 Agent）</b>：<code>RealtimeAgent</code> / <code>RealtimeSession</code> 直接跑在浏览器里，服务端只签发临时 key（<code>ek_…</code>）</li>
+      <li><b>Claude Code / Codex / Cursor</b>：Agent 循环都在用户本机，云端只是模型 API</li>
+    </ul></div>
+    <div class="card"><h4>OutBrief 的具体做法</h4><table>
+      <tr><th>交互</th><th>谁发起</th><th>服务端做什么</th></tr>
+      <tr><td>生成简报</td><td>事件到达</td><td>1 次 <code>generateObject</code></td></tr>
+      <tr><td>打断问答（每轮）</td><td>客户端</td><td>1 次 <code>streamText</code>，客户端带上报告 + 简报 + 对话历史</td></tr>
+      <tr><td>挂断生成提示词</td><td>客户端</td><td>1 次 <code>streamText</code></td></tr>
+      <tr><td>翻卡片 / 记录决策 / 续播</td><td>客户端</td><td>不参与（客户端工具）</td></tr>
+    </table><p class="muted" style="font-size:13px">服务端接口 <code>POST /v1/llm/:task</code>，<code>task</code> 只能是 <code>qa</code> / <code>next-prompt</code>，系统提示词由服务端按 task 选，客户端不能自带，防止网关被当成通用代理。</p></div>
+  </div>
+  <p class="callout g" style="margin-top:12px">关于线程：Node 是异步 I/O，等模型返回时不占线程，一个进程可以同时挂数千个流式请求；真正的成本是模型 token 和每个会话的内存。“服务端只做单轮 + 不存会话”把后者也去掉了，扩容就是加无状态实例。</p>
+
+  <h3>④ 怎么打断？——按你说的：点“打字”或按住说话，立即暂停</h3>
+  <div class="grid g2">
+    <div class="card"><h4>规则</h4><ul>
+      <li>触发暂停：按住说话（按钮或空格）、点“打字”、在输入框敲下第一个字、点决策选项</li>
+      <li>暂停时记住“第几段、第几句”；口播按句合成，所以续播从<b>当前句开头</b>重新讲，不会从半个词开始</li>
+      <li>回答播完后等你：点“继续”、按回车、或说“继续”（识别结果就是这个词时直接续播，不调 LLM）</li>
+      <li>回答过程中再次打断：取消还没返回的 LLM 请求和还没播的回答音频</li>
+      <li>首期不做“你一开口就自动打断”：扬声器外放时麦克风会收进自己的声音，需要回声消除 + VAD，放二期</li>
+    </ul></div>
+    <div class="card"><h4>状态机</h4>
+<pre><code>playing   ─按住说话/打字→ paused
+paused    ─松开/发送────→ answering
+answering ─再次打断─────→ paused
+answering ─回答播完─────→ waiting
+waiting   ─继续─────────→ playing
+任意状态  ─挂断─────────→ summarizing</code></pre>
+      <p class="muted" style="font-size:13px;margin-top:10px">answering：Azure STT → LLM 流式 → 按句 TTS；再次打断会 abort 进行中的请求；playing 从当前句开头续播；summarizing 生成下一步提示词。</p>
+    </div>
+  </div>
+
+  <h3>⑤ 语音识别用什么？——首期 Azure 免费通道，本地 SenseVoice 放二期</h3>
+  <table>
+    <tr><th>方案</th><th>费用</th><th>实测 / 资料</th><th>结论</th></tr>
+    <tr><td class="k">SenseVoice-Small int8（本地，sherpa-onnx）</td><td>免费开源</td><td>M4 Max CPU 2 线程：11.3 s 音频 <b>0.18 s</b> 识别完，模型 240 MB，加载 0.43 s；官方资料称中文准确率优于 Whisper-Large、速度快约 15 倍</td><td><span class="tag b">二期</span>sherpa-onnx 有官方 Rust crate，可放进 Tauri command；打断延迟成为痛点时再上</td></tr>
+    <tr><td class="k">Azure 路径 B STT（客户端直连）</td><td>免费（非官方）</td><td>网页里实测 200，11.3 s 音频往返 4.5 s；单次音频上限 60 s</td><td><span class="tag g">首期</span>与 TTS 共用 token，零安装；超过 60 s 的语音按段切分</td></tr>
+    <tr><td class="k">Whisper large-v3-turbo（whisper.cpp）</td><td>免费开源</td><td>自回归解码，比 SenseVoice 慢；中文不如 SenseVoice，英文更好</td><td>以英文为主的用户可以作为可选项</td></tr>
+    <tr><td class="k">系统语音识别（iOS Speech / Android SpeechRecognizer）</td><td>免费</td><td>移动端原生，可离线</td><td>二期移动端备选</td></tr>
+    <tr><td class="k">Web Speech API</td><td>—</td><td>WebView2（Windows）、WebKitGTK（Linux）不支持</td><td><span class="tag r">不用</span></td></tr>
+  </table>
+  <p class="muted" style="font-size:13px;margin-top:8px">两种方案在同一段测试音频上都把“旧接口”识别成了“就接口”（TTS 读音本身有歧义）。所以打断问答时会把识别出的文字显示给你，可以改一下再发。录音用 AudioWorklet 直接采 16 kHz 单声道 PCM，二期换本地模型时录音链路不用改。</p>
+</section>
+
+<section id="p1">
+  <h2><span class="no">4</span>首期需求（Phase 1 · 桌面端闭环 MVP）</h2>
+  <p class="sub">目标：你在一台 Mac/Windows/Linux 上，同时跑 3 个 Agent 项目，全部靠“接电话”处理完汇报，并通过复制提示词继续推进。</p>
+  <table>
+    <tr><th style="white-space:nowrap">#</th><th>需求</th><th>验收标准</th><th>骨架状态</th></tr>
+    <tr><td class="k">P1-1</td><td>Agent 接入：Claude Code Stop hook、Codex notify、generic HTTP</td><td>三种来源事件入库，保留 <code>sessionId</code>/<code>cwd</code>；服务端不可达时 Agent 不受影响</td><td><span class="tag g">已完成</span></td></tr>
+    <tr><td class="k">P1-2</td><td>事件下发与排队：SSE + 续传 + 轮询兜底；通话中新事件排队，挂断后自动响下一个</td><td>断网重连不丢不重；3 个并发事件依次响铃</td><td><span class="tag g">已完成</span></td></tr>
+    <tr><td class="k">P1-3</td><td>来电 UI：来电 / 通话中 / 挂断三态，窗口置前 + 请求注意，接听/拒绝回写状态</td><td>桌面三平台可构建；拒绝的事件进入历史可重听</td><td><span class="tag a">来电/排队已完成，历史待做</span></td></tr>
+    <tr><td class="k">P1-4</td><td>Brief Engine（服务端）：AI SDK <code>generateObject</code> 单次调用产出事实 + 口播段 + 卡片 + 决策点，代码校验关键事实覆盖</td><td>zod 校验通过；<code>critical</code> 事实 100% 覆盖；口播稿 ≤ 原文 60%</td><td><span class="tag r">待做</span></td></tr>
+    <tr><td class="k">P1-5</td><td>Voice（客户端优先）：<code>outbrief-app/src/voice/</code> 移植路径 B（TTS + STT），客户端按句合成 + 本地缓存；服务端 <code>/v1/tts</code> 官方 Key 兜底</td><td>首句音频 ≤ 3 s 可播；401/429/5xx 按策略处理；客户端失败自动走兜底</td><td><span class="tag r">待做</span></td></tr>
+    <tr><td class="k">P1-6</td><td>通话播放器：逐句播报、卡片同步翻页、暂停/继续（从当前句开头）、跳段</td><td>翻卡片与语音段双向同步</td><td><span class="tag r">待做</span></td></tr>
+    <tr><td class="k">P1-7</td><td>打断问答：点“打字”/按住说话即暂停 → Azure 路径 B STT 识别（识别文字可改后再发）→ 客户端带上下文调无状态 LLM Gateway → 回答播完“继续”；决策点可点选</td><td>回答不编造原文外事实；意见与决策全部记入会话</td><td><span class="tag r">待做</span></td></tr>
+    <tr><td class="k">P1-8</td><td>挂断总结：生成下一步提示词 + 回原会话命令，可编辑、一键复制</td><td>提示词包含全部决策与意见；Claude Code / Codex 命令可直接运行</td><td><span class="tag r">待做</span></td></tr>
+    <tr><td class="k">P1-9</td><td>设置：服务器地址/token、音色、语速、LLM 模型；托盘常驻、开机自启</td><td>设置持久化，重启后自动连接</td><td><span class="tag a">连接设置已完成</span></td></tr>
+  </table>
+  <h3>首期明确不做</h3>
+  <p class="muted">移动端打包与推送唤醒、Local Runner 自动续跑、多用户/账号体系、流式 STT、历史全文检索。</p>
+</section>
+
+<section id="roadmap">
+  <h2>路线图</h2>
+  <div class="grid g3">
+    <div class="card"><span class="tag g">Phase 1 · 约 3–4 周</span><h4>桌面闭环 MVP</h4><ul><li>P1-1 ～ P1-9</li><li>自托管部署文档</li><li>你自己日常使用，校准口吻与卡片</li></ul></div>
+    <div class="card"><span class="tag b">Phase 2</span><h4>移动端 + 一键续跑</h4><ul><li>iOS / Android 打包，CallKit / 全屏来电</li><li>APNs / FCM 推送唤醒</li><li>Local Runner：<code>claude -p --resume</code> / <code>codex exec resume</code></li><li>本地 SenseVoice STT，打断后识别从 4.5 s 降到 0.2 s</li></ul></div>
+    <div class="card"><span class="tag a">Phase 3</span><h4>多项目编排（按需）</h4><ul><li>项目维度看板、优先级、勿扰时段</li><li>多用户、团队共享汇报</li><li>视情况对接 Multica 或自建任务层</li></ul></div>
+  </div>
+</section>
+
+<section id="risk">
+  <h2>风险与对策</h2>
+  <table>
+    <tr><th>风险</th><th>影响</th><th>对策</th></tr>
+    <tr><td class="k">精炼丢关键信息</td><td>你基于错误信息做决策</td><td>先抽事实再写稿；<code>critical</code> 事实强制覆盖校验；卡片“原文”入口随时可看原报告</td></tr>
+    <tr><td class="k">Azure 路径 B 被限流/封禁</td><td>没有声音</td><td>客户端直连分摊限流；服务端官方 Key 兜底；都失败时降级为“卡片 + 文字”通话</td></tr>
+    <tr><td class="k">移动端后台限制</td><td>来电不响</td><td>首期桌面优先；二期走 APNs/FCM + CallKit/全屏通知，不依赖长连接</td></tr>
+    <tr><td class="k">报告含敏感代码/密钥</td><td>数据外泄</td><td>默认自托管；token 鉴权；LLM 走自有 CLIProxy；后续可加脱敏</td></tr>
+    <tr><td class="k">打断延迟偏高</td><td>对话不自然</td><td>二期换本地 SenseVoice（实测 0.2 s）；回复流式输出，首句先合成先播</td></tr>
+    <tr><td class="k">路径 B 密钥随客户端分发</td><td>被更多人滥用</td><td>该密钥已公开（read-frog、youtube-dubbing-extension 同款），不增加暴露面；官方 Key 只在服务端</td></tr>
+    <tr><td class="k">Azure STT 往返约 4.5 s</td><td>打断后要等</td><td>识别期间显示“正在听写”；二期接本地 SenseVoice，Azure 退为兜底</td></tr>
+  </table>
+</section>
+
+<section id="skeleton">
+  <h2>项目骨架（已上传 GitHub）</h2>
+  <p class="sub">三个私有仓库，本地都在 <code>~/work/code/outbrief/</code> 下。骨架不是空壳：事件接入 → MySQL → 排队 → 来电 UI 已端到端跑通。</p>
+  <div class="grid g2">
+    <div class="card">
+<pre><code>~/work/code/outbrief/
+├── outbrief-server/   asasas234/outbrief-server · Hono + MySQL
+│   ├── src/           /v1/events · /v1/stream(SSE) · 状态回写 · protocol.ts(zod，协议唯一来源)
+│   ├── db/            bootstrap.sql（建库/账号）· migrations/（建表，启动时自动执行）
+│   └── docs/          proposal.html 本方案 · adr/ 0001–0003
+├── outbrief-app/      asasas234/outbrief-app · Tauri 2 + React 19
+│   ├── src/           callQueue 状态机 · SSE 客户端 · 来电/通话 UI · protocol.ts(镜像)
+│   │                  voice/（首期新增：Azure 路径 B TTS + STT）
+│   └── src-tauri/     Rust 壳（窗口置前、请求注意）
+└── outbrief-hook/     asasas234/outbrief-hook · 零依赖 Node 脚本
+    └── src/           Claude Code Stop / Codex notify 归一化 · protocol.ts(镜像)</code></pre>
+    </div>
+    <div class="card"><h4>已验证</h4><ul>
+      <li>三个仓库各自 <code>pnpm lint</code> / <code>typecheck</code> / <code>test</code> 全绿：server 8（真实 MySQL <code>outbrief_test</code> 库）· app 6 · hook 7</li><li>本机 docker <code>some-mysql</code> 已建 <code>outbrief</code> / <code>outbrief_test</code> 库和 <code>outbrief</code> 账号，<code>pnpm db:migrate</code> 建好 <code>agent_events</code> 表</li>
+      <li>真实启动服务 → 用 hook CLI 发 Claude Code / Codex 事件 → SSE 实时收到；无关事件类型被忽略；服务端宕机时 hook 仍 <code>exit 0</code></li>
+      <li>浏览器驱动 UI：来电 → 接听 → 通话中再来事件 → 显示“还有 1 个汇报在排队” → 挂断后自动响下一个；服务端状态正确回写</li>
+      <li><code>cargo build</code>（Tauri 2.11，Rust stable）通过</li>
+    </ul></div>
+  </div>
+</section>
+</main>
+<footer><div class="wrap">OutBrief · 方案汇报 · 2026-09-25 · 首期需求已拆为独立 issue 跟进。</div></footer>
+</body>
+</html>
