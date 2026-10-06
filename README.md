@@ -1,5 +1,7 @@
 # outbrief-server
 
+[English](README.en.md)
+
 OutBrief 服务端：只做中转。接收 outbrief-daemon 加密好的汇报（含口播简报），暂存进 MySQL，再通过 SSE 推给客户端“来电”；挂断后把客户端加密好的回复排队交还给 daemon。服务端没有密钥，看不到汇报、简报和回复的内容（端到端加密，[ADR 0007](docs/adr/0007-end-to-end-encryption.md)）；来电结束就删掉密文，历史记录只存在用户自己的设备上（[ADR 0006](docs/adr/0006-relay-without-login-or-history.md)）；没有登录，账号是匿名的，每台设备一把令牌，设备之间用配对码加入同一个账号（[ADR 0008](docs/adr/0008-anonymous-accounts-and-device-pairing.md)）。服务端不调用任何大模型：简报由用户电脑上的 [`outbrief-daemon`](https://github.com/outbriefapp/outbrief-daemon) 生成，通话中的问答在客户端里做，都用用户自己的大模型配置（[ADR 0005](docs/adr/0005-llm-on-user-devices.md)）。
 
 OutBrief 由三个仓库组成，本地统一放在 `~/work/code/outbrief/`：
@@ -11,6 +13,33 @@ OutBrief 由三个仓库组成，本地统一放在 `~/work/code/outbrief/`：
 | [`outbrief-daemon`](https://github.com/outbriefapp/outbrief-daemon) | 每台 Agent 电脑上的常驻进程，含 Claude Code / Codex 完成回调（原 `outbrief-hook` 已并入） |
 
 方案：[`docs/proposal.html`](docs/proposal.html)；决策记录：[`docs/adr/`](docs/adr/)。
+
+## 安装顺序
+
+来电只在同一个匿名账号里转发。推荐让跑 Agent 的那台电脑上的 daemon 创建账号，桌面 App 和手机 App 都加入这个账号。
+
+1. **部署本仓库（server）**。只跑一个进程。私有化部署（默认）在还没有主人时，每次启动的日志里打印一次性认领码 `Claim code: XXXX-XXXX-XXXX`。记下服务地址。手机和别的电脑要能访问这个地址；`http://127.0.0.1:8787` 只有部署 server 的那台机器自己能用。给手机配对时，daemon 和 App 里填局域网 IP 或公网 `https://` 地址。命令见下方「部署」。
+2. **在跑 Agent 的电脑上安装 [outbrief-daemon](https://github.com/outbriefapp/outbrief-daemon)**。`pnpm install` 之后执行 `node src/cli.ts login --server <服务地址>`，输入认领码。终端打出二维码和 6 位配对码。macOS 上接着执行 `node src/cli.ts install`（开机自启，并写入 Claude Code / Codex 的 Stop hook）。`install` 把 node 和 `src/cli.ts` 的绝对路径写进 launchd，仓库留在原地。
+3. **在同一台电脑上安装桌面 App（[outbrief-app](https://github.com/outbriefapp/outbrief-app)）**。`pnpm tauri build`，安装包在 `src-tauri/target/release/bundle/`。开发时用 `pnpm tauri dev`。daemon 已经在运行时，桌面端第一次打开会自动加入这台 daemon 的账号。
+4. **安装手机 App**。同一仓库，Android / iOS 工程在本机生成后再编译：`pnpm tauri android init`，然后 `pnpm tauri android dev` 或 `pnpm tauri android build`；iOS 用 `pnpm tauri ios init`，然后 `pnpm tauri ios dev` 或 `pnpm tauri ios build`。需要 [Tauri 的移动端环境](https://tauri.app/start/prerequisites/)。仓库里没有应用商店安装包。打开已配对设备的「设置 → 设备 → 添加设备」，或在电脑上执行 `node src/cli.ts pair`，用手机摄像头扫二维码。
+
+### 配对
+
+没有登录，也没有共享口令。谁先装谁建账号，后来的设备用 6 位配对码加入。配对码 10 分钟有效、只能用一次。二维码和配对链接是 `outbrief://pair?server=<服务地址>&code=<6位>&key=obk1_…`。服务地址和端到端密钥由设备直接交给设备，server 看不到密钥。
+
+| 已在账号里 | 要加入的设备 | 怎么做 |
+|---|---|---|
+| 这台电脑的 daemon 正在运行 | 同一台电脑的桌面 App | 自动。App 用本机 `~/.outbrief/local-api.key` 向 `127.0.0.1:8790` 要配对码和密钥 |
+| 桌面 App，或 daemon（`node src/cli.ts pair`） | 手机 App | 手机扫「设置 → 设备 → 添加设备」或终端里的二维码 |
+| 手机或另一台电脑上的 App | 一台电脑的 daemon | 在「添加设备」页复制命令，在那台电脑上执行 `node src/cli.ts login 'outbrief://pair?…'` |
+| 任意已配对设备 | 另一台电脑的桌面 App | 桌面端把配对链接贴进欢迎页。桌面端不开摄像头 |
+| 只拿到 6 位数字 | daemon 或 App | 再输入「设置 → 加密」里的同一句话（至少 12 个字符）。没设过这句话时，用带 `key=` 的二维码或配对链接 |
+
+先打开 App、由 App 创建账号也可以：欢迎页填服务地址和认领码，点「创建新账号」，再用「添加设备」里的链接在电脑上 `login`。同一台电脑上的 daemon 配对并运行之后，这台电脑的桌面 App 加入的是 daemon 所在的账号。
+
+只有手机、不装桌面 App：做完第 1、2 步，用手机扫 daemon 登录时终端里的二维码。手机上的 Multica、大模型、汇报语言经 server 加密转给这台电脑的 daemon，电脑要在线。
+
+公共云端把 `OUTBRIEF_OPEN_SIGNUP=true` 打开后，第一台设备直接建账号，认领码不用填。
 
 ## 接口
 
@@ -71,7 +100,22 @@ OutBrief 由三个仓库组成，本地统一放在 `~/work/code/outbrief/`：
 
 ## 部署
 
-只能运行**一个实例**：在线状态、SSE 推送、设置转发、限流都在进程内存里（[ADR 0009](docs/adr/0009-single-instance-first.md)）。副本数固定为 1、不开自动扩容；发布用“先停旧的、再起新的”（k8s `strategy: Recreate`），不要滚动更新或蓝绿部署，否则新旧版本同时在线时会漏推、漏接来电。MySQL 要有备份。
+只能运行**一个实例**：在线状态、SSE 推送、设置转发、限流都在进程内存里（[ADR 0009](docs/adr/0009-single-instance-first.md)）。副本数固定为 1、不开自动扩容；发布用“先停旧的、再起新的”（k8s `strategy: Recreate`），不要滚动更新或蓝绿部署，否则新旧版本同时在线时会漏推、漏接来电。MySQL 要有备份。安装顺序和桌面 / 手机如何配对见上文「安装顺序」。
+
+### 直接运行
+
+需要 Node ≥ 22.18、pnpm 9、MySQL 8。表在进程启动时按 `db/migrations/` 自动迁移。
+
+```bash
+pnpm install
+OUTBRIEF_DATABASE_URL='mysql://USER:PASSWORD@HOST:3306/outbrief' PORT=8787 pnpm start
+```
+
+`OUTBRIEF_DATABASE_URL` 由部署环境注入。上面的用户名和口令是占位符，生产使用自己的账号，不要把连接串写进仓库。本地开发库的口令只在 [`db/bootstrap.sql`](db/bootstrap.sql)。
+
+还没有账号时，日志打印 `Claim code: XXXX-XXXX-XXXX`。第一台设备（App 欢迎页或 `outbrief-daemon login`）填这个码。认领之后注册关闭，其他设备用配对码加入。公共云端设 `OUTBRIEF_OPEN_SIGNUP=true`。
+
+健康检查：`GET /healthz`。
 
 ### Railway
 
