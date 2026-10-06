@@ -73,6 +73,15 @@ OutBrief 由三个仓库组成，本地统一放在 `~/work/code/outbrief/`：
 
 只能运行**一个实例**：在线状态、SSE 推送、设置转发、限流都在进程内存里（[ADR 0009](docs/adr/0009-single-instance-first.md)）。副本数固定为 1、不开自动扩容；发布用“先停旧的、再起新的”（k8s `strategy: Recreate`），不要滚动更新或蓝绿部署，否则新旧版本同时在线时会漏推、漏接来电。MySQL 要有备份。
 
+### Railway
+
+仓库里的 [`railway.json`](railway.json) 写好了健康检查和重启策略。其余配置只能在 Railway 上设置：
+
+- 加一个 MySQL 8 服务（镜像 `mysql:8.4`，卷挂在 `/var/lib/mysql`），只走私网，不开公网 TCP Proxy。
+- server 的变量：`OUTBRIEF_DATABASE_URL` 引用 MySQL 服务的 `MYSQL_URL`（`${{MySQL.MYSQL_URL}}`），不要把连接串明文写进仓库或文档；`PORT=8787`。
+- 副本数 1，并给 server 挂一个卷（比如 `/data`，代码不读写它）：Railway 不允许同一个服务的两个部署同时挂着卷，挂了卷发布时就会先停旧部署、再起新的，也开不了多副本，正好满足上面的单实例约束。
+- 自定义域名按 Railway 给出的 CNAME 和 `_railway-verify` TXT 记录在 DNS 里添加；用 Cloudflare 时先只做 DNS 解析（灰色云朵），让 Railway 签发证书。
+
 ## 本地开发
 
 需要 Node ≥ 22.18、pnpm 9、本机 MySQL 8（docker 容器 `some-mysql`）。
