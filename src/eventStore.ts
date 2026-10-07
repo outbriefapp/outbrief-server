@@ -10,7 +10,7 @@ import type {
   MulticaReport,
   Sealed,
 } from "./protocol.ts";
-import { REPLY_TTL_MS } from "./protocol.ts";
+import { ALREADY_ENDED, ANSWERED_ELSEWHERE, REPLY_TTL_MS } from "./protocol.ts";
 
 type Listener = (event: AgentEvent) => void;
 
@@ -26,6 +26,9 @@ interface EventRow extends RowDataPacket {
   account_id: string;
   source: AgentEvent["source"];
   status: EventStatus;
+  /** devices columns of the device that answered or ended the call; null until one did. */
+  handled_by: string | null;
+  hd_name: string | null;
   occurred_at: Date;
   received_at: Date;
   /** Null once the call ended. */
@@ -66,7 +69,8 @@ export interface NewReport {
   sealed: Sealed;
 }
 
-const SELECT_EVENTS = `SELECT e.seq, e.id, e.account_id, e.source, e.status, e.occurred_at, e.received_at, e.sealed,
+const SELECT_EVENTS = `SELECT e.seq, e.id, e.account_id, e.source, e.status, e.handled_by, hd.name AS hd_name,
+  e.occurred_at, e.received_at, e.sealed,
   m.task_id AS m_task_id, m.reply_comment_id AS m_reply_comment_id, m.replied_at AS m_replied_at,
   e.machine_id, mc.name AS mc_name,
   r.id AS r_id, r.status AS r_status, r.error AS r_error,
@@ -74,6 +78,7 @@ const SELECT_EVENTS = `SELECT e.seq, e.id, e.account_id, e.source, e.status, e.o
   FROM agent_events e
   LEFT JOIN multica_reports m ON m.event_id = e.id
   LEFT JOIN devices mc ON mc.id = e.machine_id
+  LEFT JOIN devices hd ON hd.id = e.handled_by
   LEFT JOIN daemon_replies r ON r.event_id = e.id`;
 
 const PAGE = 100;
@@ -116,8 +121,21 @@ function toEvent(row: EventRow, presence: Presence): AgentEvent {
         ? { id: row.machine_id, name: row.mc_name, online: presence.isOnline(row.machine_id) }
         : undefined,
     delivery: toDelivery(row),
+    handledBy:
+      row.handled_by && row.hd_name !== null
+        ? { id: row.handled_by, name: row.hd_name }
+        : undefined,
   };
 }
+
+/** Why a device may not answer or end a call (OUTB-57). */
+export type CallRefusal = typeof ANSWERED_ELSEWHERE | typeof ALREADY_ENDED;
+
+/** The result of answering or ending a call: the updated event, or why it was refused. */
+export type CallChange =
+  | { ok: true; event: AgentEvent }
+  | { ok: false; error: CallRefusal; event: AgentEvent }
+  | undefined;
 
 async function insertEvent(
   db: Pick<Pool, "execute"> | PoolConnection,
@@ -133,6 +151,11 @@ async function insertEvent(
      VALUES (?, ?, ?, ?, ?, 'received', ?, ?)`,
     [id, accountId, report.source, machineId, report.sealed, occurredAt, now],
   );
+}
+
+/** Why `deviceId` may not answer or end `event`. */
+function refusal(event: AgentEvent, deviceId: string): CallRefusal {
+  return event.handledBy && event.handledBy.id !== deviceId ? ANSWERED_ELSEWHERE : ALREADY_ENDED;
 }
 
 const NOBODY_ONLINE: Presence = { isOnline: () => false };
@@ -160,6 +183,7 @@ export class EventStore {
   readonly #pool: Pool;
   readonly #listeners = new Set<Subscription>();
   readonly #deliveryListeners = new Set<Subscription>();
+  readonly #callStatusListeners = new Set<Subscription>();
   #inserting: Promise<void> = Promise.resolve();
   #presence: Presence = NOBODY_ONLINE;
 
@@ -252,12 +276,23 @@ export class EventStore {
     return run;
   }
 
-  /** The account's events still waiting for a call, oldest first, strictly after `afterSeq`. */
-  async listPending(accountId: string, afterSeq = 0, limit = PAGE): Promise<AgentEvent[]> {
+  /**
+   * The account's events still waiting for a call, oldest first, strictly after `afterSeq`. With
+   * `deviceId`, only the ones no other device answered: those no longer ring on this one.
+   */
+  async listPending(
+    accountId: string,
+    afterSeq = 0,
+    deviceId: string | null = null,
+    limit = PAGE,
+  ): Promise<AgentEvent[]> {
     const [rows] = await this.#pool.execute<EventRow[]>(
       `${SELECT_EVENTS} WHERE e.account_id = ? AND e.status = 'received' AND e.seq > ?
+       ${deviceId === null ? "" : "AND (e.handled_by IS NULL OR e.handled_by = ?)"}
        ORDER BY e.seq LIMIT ?`,
-      [accountId, afterSeq, String(limit)],
+      deviceId === null
+        ? [accountId, afterSeq, String(limit)]
+        : [accountId, afterSeq, deviceId, String(limit)],
     );
     return rows.map((row) => toEvent(row, this.#presence));
   }
@@ -282,19 +317,51 @@ export class EventStore {
   }
 
   /**
+   * `deviceId` takes the account's ringing call: the first device to answer has it, and the other
+   * devices are told to stop ringing. Answering it again from the same device is a no-op.
+   */
+  async answer(accountId: string, id: string, deviceId: string): Promise<CallChange> {
+    const [result] = await this.#pool.execute<ResultSetHeader>(
+      `UPDATE agent_events SET handled_by = ?
+       WHERE id = ? AND account_id = ? AND status = 'received' AND handled_by IS NULL`,
+      [deviceId, id, accountId],
+    );
+    const event = await this.get(id, accountId);
+    if (!event) return undefined;
+    if (result.affectedRows) {
+      this.#emitCallStatus(event, accountId);
+      return { ok: true, event };
+    }
+    if (event.status === "received" && event.handledBy?.id === deviceId) return { ok: true, event };
+    return { ok: false, error: refusal(event, deviceId), event };
+  }
+
+  /**
    * Ends the account's call and erases its sealed report: the clients keep their own copy. The
-   * source, machine and Multica task stay, so a reply can still be routed later.
+   * source, machine and Multica task stay, so a reply can still be routed later. Only a call still
+   * ringing, or answered by `deviceId`, ends: a later outcome from another device never overwrites
+   * the first. Reporting the same outcome again from the same device is a no-op.
    */
   async setOutcome(
     accountId: string,
     id: string,
     status: CallOutcome,
-  ): Promise<AgentEvent | undefined> {
-    await this.#pool.execute(
-      "UPDATE agent_events SET status = ?, sealed = NULL WHERE id = ? AND account_id = ?",
-      [status, id, accountId],
+    deviceId: string,
+  ): Promise<CallChange> {
+    const [result] = await this.#pool.execute<ResultSetHeader>(
+      `UPDATE agent_events SET status = ?, sealed = NULL, handled_by = ?
+       WHERE id = ? AND account_id = ? AND status = 'received'
+         AND (handled_by IS NULL OR handled_by = ?)`,
+      [status, deviceId, id, accountId, deviceId],
     );
-    return this.get(id, accountId);
+    const event = await this.get(id, accountId);
+    if (!event) return undefined;
+    if (result.affectedRows) {
+      this.#emitCallStatus(event, accountId);
+      return { ok: true, event };
+    }
+    if (event.status === status && event.handledBy?.id === deviceId) return { ok: true, event };
+    return { ok: false, error: refusal(event, deviceId), event };
   }
 
   // --- Replies to daemon-relayed events ------------------------------------------------------
@@ -457,6 +524,12 @@ export class EventStore {
     for (const sub of this.#deliveryListeners) if (sub.accountId === accountId) sub.listener(event);
   }
 
+  #emitCallStatus(event: AgentEvent, accountId: string): void {
+    for (const sub of this.#callStatusListeners) {
+      if (sub.accountId === accountId) sub.listener(event);
+    }
+  }
+
   /** New events of the account. */
   subscribe(accountId: string, listener: Listener): () => void {
     const sub = { accountId, listener };
@@ -474,9 +547,17 @@ export class EventStore {
     return () => this.#deliveryListeners.delete(sub);
   }
 
+  /** Calls of the account that a device answered or ended. */
+  subscribeCallStatus(accountId: string, listener: Listener): () => void {
+    const sub = { accountId, listener };
+    this.#callStatusListeners.add(sub);
+    return () => this.#callStatusListeners.delete(sub);
+  }
+
   /** Drops stream subscribers; the pool is owned (and ended) by the caller. */
   close(): void {
     this.#listeners.clear();
     this.#deliveryListeners.clear();
+    this.#callStatusListeners.clear();
   }
 }

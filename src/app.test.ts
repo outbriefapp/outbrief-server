@@ -5,11 +5,12 @@ import { migrate } from "./db/migrate.ts";
 import { openPool } from "./db/pool.ts";
 import { resetTables, testDatabaseUrl } from "./db/testDatabase.ts";
 import type { EventStore } from "./eventStore.ts";
-import { type AgentEvent, STREAM_EVENT_NAME } from "./protocol.ts";
+import { type AgentEvent, CALL_STATUS_EVENT_NAME, STREAM_EVENT_NAME } from "./protocol.ts";
 import { sealed } from "./testing/sealed.ts";
-import { buildServer, signup } from "./testing/server.ts";
+import { buildServer, join, signup } from "./testing/server.ts";
 
 let auth: Record<string, string>;
+let token: string;
 
 let pool: Pool;
 let store: EventStore;
@@ -25,7 +26,7 @@ afterAll(() => pool.end());
 beforeEach(async () => {
   await resetTables(pool);
   ({ app, store } = buildServer(pool));
-  const { token } = await signup(app.request);
+  ({ token } = await signup(app.request));
   auth = { Authorization: `Bearer ${token}`, "Content-Type": "application/json" };
 });
 afterEach(() => {
@@ -204,6 +205,118 @@ describe("ending a call", () => {
     expect((await app.request("/v1/history", { headers: auth })).status).toBe(404);
   });
 });
+
+describe("several devices of one account (OUTB-57)", () => {
+  let phone: Record<string, string>;
+  let phoneId: string;
+
+  beforeEach(async () => {
+    const joined = await join(app.request, token, { name: "iPhone", kind: "app" });
+    phone = { Authorization: `Bearer ${joined.token}`, "Content-Type": "application/json" };
+    phoneId = joined.device.id;
+  });
+
+  function postAs(headers: Record<string, string>, body: unknown, path: string) {
+    return app.request(path, { method: "POST", headers, body: JSON.stringify(body) });
+  }
+
+  it("lets the first device answer take the call; the others are refused", async () => {
+    const a = await postEvent({ source: "codex", sealed: sealed("a") });
+
+    const answered = await postAs(phone, {}, `/v1/events/${a.id}/answer`);
+    expect(answered.status).toBe(200);
+    expect(await answered.json()).toMatchObject({
+      id: a.id,
+      status: "received",
+      handledBy: { id: phoneId, name: "iPhone" },
+    });
+    // Answering again on the same device is fine; the Mac is too late.
+    expect((await postAs(phone, {}, `/v1/events/${a.id}/answer`)).status).toBe(200);
+    const late = await post({}, `/v1/events/${a.id}/answer`);
+    expect(late.status).toBe(409);
+    expect(await late.json()).toMatchObject({
+      error: "answered_elsewhere",
+      event: { id: a.id, sealed: null, handledBy: { id: phoneId } },
+    });
+    expect((await post({}, "/v1/events/nope/answer")).status).toBe(404);
+  });
+
+  it("keeps the first outcome: another device can no longer end the call", async () => {
+    const a = await postEvent({ source: "codex", sealed: sealed("a") });
+    await postAs(phone, {}, `/v1/events/${a.id}/answer`);
+
+    const declined = await post({ status: "dismissed" }, `/v1/events/${a.id}/status`);
+    expect(declined.status).toBe(409);
+    expect(await declined.json()).toMatchObject({ error: "answered_elsewhere" });
+
+    const done = await postAs(phone, { status: "completed" }, `/v1/events/${a.id}/status`);
+    expect(await done.json()).toMatchObject({ status: "completed", handledBy: { id: phoneId } });
+    // Reporting it again (a retry after a restart) is a no-op; a different outcome is refused.
+    expect((await postAs(phone, { status: "completed" }, `/v1/events/${a.id}/status`)).status).toBe(
+      200,
+    );
+    const changed = await postAs(phone, { status: "dismissed" }, `/v1/events/${a.id}/status`);
+    expect(changed.status).toBe(409);
+    expect(await changed.json()).toMatchObject({ error: "already_ended" });
+  });
+
+  it("no longer replays a call another device answered", async () => {
+    const a = await postEvent({ source: "codex", sealed: sealed("a") });
+    const b = await postEvent({ source: "codex", sealed: sealed("b") });
+    await postAs(phone, {}, `/v1/events/${a.id}/answer`);
+
+    expect(await pendingIds()).toEqual([b.id]);
+    const onPhone = await app.request("/v1/events", { headers: phone });
+    const ids = ((await onPhone.json()) as { events: AgentEvent[] }).events.map((e) => e.id);
+    expect(ids).toEqual([a.id, b.id]);
+  });
+
+  it("tells every device of the account when a call is answered or ended", async () => {
+    const a = await postEvent({ source: "codex", sealed: sealed("a") });
+    const b = await postEvent({ source: "codex", sealed: sealed("b") });
+    const res = await app.request("/v1/stream", {
+      headers: { ...auth, "Last-Event-ID": String(b.seq) },
+    });
+    const statuses = readCallStatuses(res, 3);
+    await new Promise((r) => setTimeout(r, 50));
+
+    await postAs(phone, {}, `/v1/events/${a.id}/answer`);
+    await postAs(phone, { status: "completed" }, `/v1/events/${a.id}/status`);
+    await post({ status: "dismissed" }, `/v1/events/${b.id}/status`);
+
+    expect(await statuses).toMatchObject([
+      { id: a.id, status: "received", sealed: null, handledBy: { id: phoneId } },
+      { id: a.id, status: "completed", sealed: null, handledBy: { id: phoneId } },
+      { id: b.id, status: "dismissed", sealed: null },
+    ]);
+  });
+});
+
+/** Reads SSE frames until `count` call-status frames arrived, then cancels the stream. */
+async function readCallStatuses(res: Response, count: number): Promise<AgentEvent[]> {
+  if (!res.body) throw new Error("stream response has no body");
+  const reader = res.body.pipeThrough(new TextDecoderStream()).getReader();
+  let buf = "";
+  const events: AgentEvent[] = [];
+  while (events.length < count) {
+    const { value, done } = await reader.read();
+    if (done) break;
+    buf += value;
+    for (let idx = buf.indexOf("\n\n"); idx >= 0; idx = buf.indexOf("\n\n")) {
+      const frame = buf.slice(0, idx);
+      buf = buf.slice(idx + 2);
+      const lines = frame.split("\n");
+      if (!lines.includes(`event: ${CALL_STATUS_EVENT_NAME}`)) continue;
+      const data = lines
+        .find((l) => l.startsWith("data:"))
+        ?.slice(5)
+        .trim();
+      events.push(JSON.parse(data ?? "null"));
+    }
+  }
+  await reader.cancel();
+  return events;
+}
 
 describe("replies", () => {
   it("refuses a reply to an event no daemon reported, and a reply in the clear", async () => {
