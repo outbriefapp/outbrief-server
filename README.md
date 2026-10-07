@@ -57,8 +57,9 @@ OutBrief 由三个仓库组成，本地统一放在 `~/work/code/outbrief/`：
 | `POST` | `/v1/devices/:id/settings` | `{ requestId, sealed }` → `{ sealed }`：把加密的设置请求转给这台电脑的 daemon，返回它加密的结果（手机改 daemon 设置、派单用）；`sealed` 最长 1.8 亿字符（派单的图片一张一张转，每张最大 100 MB，和 Multica 的上传上限一致，YOUT-226），其他密文仍是 200 万；`409 machine_offline`，`504 machine_timeout` |
 | `POST` | `/v1/events` | 上报一条加密的汇报 `{ source, occurredAt?, sealed }`；返回 `201` + `AgentEvent`，立即推送给本账号的设备。明文字段（`content` 等）一律 `400` |
 | `GET` | `/v1/events?after=<seq>` | 轮询：本账号 `seq` 之后仍待接听的汇报（密文） |
-| `GET` | `/v1/stream` | SSE；事件名 `agent-event`，`id` = `seq`，支持 `Last-Event-ID` 续传；只推本账号的来电和投递状态 |
-| `POST` | `/v1/events/:id/status` | 客户端回写 `completed` / `dismissed` / `acknowledged`（未接来电「全部知悉」），同时删掉这通来电的密文（`sealed: null`） |
+| `GET` | `/v1/stream` | SSE；事件名 `agent-event`，`id` = `seq`，支持 `Last-Event-ID` 续传；只推本账号的来电和投递状态；另推 `call-status`：某台设备接起或结束了一通来电（不带密文），还在响的设备停下；重放时不再推别的设备已接的来电 |
+| `POST` | `/v1/events/:id/status` | 客户端回写 `completed` / `dismissed` / `acknowledged`（未接来电「全部知悉」），同时删掉这通来电的密文（`sealed: null`）。只有还在响、或由这台设备接起的来电能结束；别的设备已经接了 `409 answered_elsewhere`，已经结束 `409 already_ended`（同一台设备重复回写同一结果是 200） |
+| `POST` | `/v1/events/:id/answer` | 这台设备接起来电。账号下所有设备同时响铃，第一台接的拿到来电（`handledBy`），别的设备收到 `call-status` 停止响铃；晚到的 `409 answered_elsewhere` |
 | `POST` | `/v1/events/:id/reply` | 挂断后回复 `{ sealed }`：排队交给上报这通来电的机器的 daemon。daemon 解密后接着原会话运行 Agent，或者（Multica 汇报）用本机保存的 Multica 令牌发评论 |
 | `GET` | `/v1/daemon` | daemon 令牌。WebSocket：下发回复、转发设置请求，收回执行结果 |
 | `POST` | `/v1/daemon/events` | daemon 令牌。daemon 转发本机 Agent 的汇报 `{ source, occurredAt?, sealed }` |

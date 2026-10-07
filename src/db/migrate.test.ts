@@ -48,6 +48,7 @@ it("applies each migration once and drops retired tables", async () => {
     "010_sealed_payloads",
     "011_drop_retired_tables",
     "012_accounts_and_devices",
+    "013_call_handled_by",
   ]);
   expect(await migrate(url)).toEqual([]);
   expect(await tableNames(url)).toEqual([
@@ -119,7 +120,7 @@ it("moves the data from before accounts into one default account, keeping machin
   `);
   await old.end();
 
-  expect(await migrate(url)).toEqual(["012_accounts_and_devices"]);
+  expect(await migrate(url)).toEqual(["012_accounts_and_devices", "013_call_handled_by"]);
 
   const check = await createConnection({ uri: url });
   try {

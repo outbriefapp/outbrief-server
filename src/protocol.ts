@@ -17,6 +17,7 @@ export type HookSource = z.infer<typeof HookSource>;
  * completed -> the user took the call and hung up
  * dismissed -> the user declined the call
  * acknowledged -> a missed call the user knows about and will not answer (全部知悉, YOUT-212)
+ * A call being answered stays `received`, with `handledBy` set.
  */
 export const EventStatus = z.enum(["received", "completed", "dismissed", "acknowledged"]);
 export type EventStatus = z.infer<typeof EventStatus>;
@@ -312,6 +313,11 @@ export const AgentEvent = z.object({
   machine: MachineRef.optional(),
   /** Present once a reply to a daemon-relayed event was sent. */
   delivery: Delivery.optional(),
+  /**
+   * The device that answered the call, or ended it (declined, acknowledged). Every device rings;
+   * once one has it the others stop and only it may end the call (OUTB-57).
+   */
+  handledBy: z.object({ id: z.string(), name: z.string() }).optional(),
 });
 export type AgentEvent = z.infer<typeof AgentEvent>;
 
@@ -320,6 +326,20 @@ export type UpdateEventStatusInput = z.infer<typeof UpdateEventStatusInput>;
 
 /** SSE event name used on `/v1/stream`; the SSE `id` field carries `AgentEvent.seq`. */
 export const STREAM_EVENT_NAME = "agent-event";
+
+/**
+ * SSE event name for a call another device answered or ended; `data` is the `AgentEvent` without
+ * its `sealed` report. Devices still ringing it stop (OUTB-57).
+ */
+export const CALL_STATUS_EVENT_NAME = "call-status";
+
+/**
+ * `POST /v1/events/:id/answer` → the `AgentEvent`, now `handledBy` this device. The first device to
+ * answer takes the call. Errors: 404 unknown event, 409 `answered_elsewhere` (another device has
+ * it) / `already_ended`. `POST /v1/events/:id/status` gives the same 409s.
+ */
+export const ANSWERED_ELSEWHERE = "answered_elsewhere";
+export const ALREADY_ENDED = "already_ended";
 
 /**
  * `POST /v1/events/:id/reply` → the updated `AgentEvent` with `delivery` (queued for the machine

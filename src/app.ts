@@ -10,9 +10,10 @@ import type { AuthDevice, DevicePresence, DeviceStore } from "./accounts/devices
 import type { PairingStore } from "./accounts/pairing.ts";
 import { RateLimiter } from "./accounts/rateLimit.ts";
 import { type DaemonGateway, SettingsRelayError } from "./daemon/gateway.ts";
-import type { EventStore } from "./eventStore.ts";
+import type { CallChange, EventStore } from "./eventStore.ts";
 import {
   type AgentEvent,
+  CALL_STATUS_EVENT_NAME,
   CreateAccountInput,
   DELIVERY_EVENT_NAME,
   MulticaReportInput,
@@ -24,6 +25,14 @@ import {
   STREAM_EVENT_NAME,
   UpdateEventStatusInput,
 } from "./protocol.ts";
+
+/** 200 with the event, 404, or 409 with why this device may not answer or end the call. */
+function callChangeResponse(c: Context, change: CallChange): Response {
+  if (!change) return c.json({ error: "not_found" }, 404);
+  return change.ok
+    ? c.json(change.event)
+    : c.json({ error: change.error, event: { ...change.event, sealed: null } }, 409);
+}
 
 export interface AppDeps {
   store: EventStore;
@@ -333,7 +342,11 @@ export function createApp({
   /** Polling fallback: the account's pending events after `?after=<seq>`. */
   app.get("/v1/events", async (c) =>
     c.json({
-      events: await store.listPending(c.get("device").accountId, parseSeq(c.req.query("after"))),
+      events: await store.listPending(
+        c.get("device").accountId,
+        parseSeq(c.req.query("after")),
+        c.get("device").id,
+      ),
     }),
   );
 
@@ -342,12 +355,20 @@ export function createApp({
     if (!parsed.success) {
       return c.json({ error: "invalid_status", issues: parsed.error.issues }, 400);
     }
-    const event = await store.setOutcome(
-      c.get("device").accountId,
-      c.req.param("id"),
-      parsed.data.status,
+    const { accountId, id } = c.get("device");
+    return callChangeResponse(
+      c,
+      await store.setOutcome(accountId, c.req.param("id"), parsed.data.status, id),
     );
-    return event ? c.json(event) : c.json({ error: "not_found" }, 404);
+  });
+
+  /**
+   * This device takes the ringing call. Every device of the account rings; the first to answer has
+   * the call and the others stop (OUTB-57).
+   */
+  app.post("/v1/events/:id/answer", async (c) => {
+    const { accountId, id } = c.get("device");
+    return callChangeResponse(c, await store.answer(accountId, c.req.param("id"), id));
   });
 
   /**
@@ -409,7 +430,18 @@ export function createApp({
         });
       });
       stream.onAbort(unsubscribeDeliveries);
-      for (const event of await store.listPending(me.accountId, after)) send(event);
+      // Another device answered or ended a call: the ones still ringing it stop. Live-only too.
+      const unsubscribeCallStatus = store.subscribeCallStatus(me.accountId, (event) => {
+        chain = chain.then(async () => {
+          if (stream.aborted) return;
+          await stream.writeSSE({
+            event: CALL_STATUS_EVENT_NAME,
+            data: JSON.stringify({ ...event, sealed: null }),
+          });
+        });
+      });
+      stream.onAbort(unsubscribeCallStatus);
+      for (const event of await store.listPending(me.accountId, after, me.id)) send(event);
       for (const event of heldBack) send(event);
       heldBack = undefined;
       while (!stream.aborted) {
