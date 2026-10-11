@@ -80,17 +80,38 @@ Nothing is required. The process starts with no `.env`. [`.env.example`](.env.ex
 
 ### Local development
 
-Node ≥ 22.18, pnpm 9, and a local MySQL 8 (docker container `some-mysql`).
+Node ≥ 22.18, pnpm 9, and Docker. The database is a local MySQL 8 container. Its name must be `some-mysql`, and it must publish container port 3306 on the host's 3306. The default URL is `mysql://outbrief:outbrief_local@127.0.0.1:3306/outbrief`. A different host port does not match that URL. The commands below, and `pnpm dev:all` in outbrief-app, look up the container by this name. They do not create it.
+
+Create the container once. The image is `mysql:8.4`, the same image the Railway section uses. `MYSQL_ROOT_PASSWORD` is only the root password of this machine. Production does not use it.
+
+```bash
+docker run -d \
+  --name some-mysql \
+  --restart unless-stopped \
+  -e MYSQL_ROOT_PASSWORD='local-root-password' \
+  -p 3306:3306 \
+  mysql:8.4
+```
+
+Wait until it answers. This check takes no password:
+
+```bash
+until docker exec some-mysql mysqladmin ping -h127.0.0.1 --silent; do sleep 1; done
+```
+
+Then:
 
 ```bash
 pnpm install
-# 1. Create the database and user once, as root
+# 1. Create the database and user once. At the password prompt, type the MYSQL_ROOT_PASSWORD from above
 docker exec -i some-mysql mysql -uroot -p < db/bootstrap.sql
 # 2. Create tables (startup does this too)
 pnpm db:migrate
 # 3. Start. The log prints a claim code while the server has no owner
 pnpm dev
 ```
+
+`db/bootstrap.sql` creates the databases `outbrief` and `outbrief_test`, and the user `outbrief` with password `outbrief_local`. That password is for this machine only. If the container already exists, do not run `docker run` again. If it is stopped, run `docker start some-mysql`. If something else is listening on 3306, stop that process before creating the container.
 
 Schema changes are new files `db/migrations/NNN_*.sql`, applied once in filename order. Applied versions are recorded in `schema_migrations`. Add a new file. Leave a file that has already been applied alone.
 
@@ -102,6 +123,7 @@ Schema changes are new files `db/migrations/NNN_*.sql`, applied once in filename
 | `pnpm typecheck` | `tsc` |
 | `pnpm test` | Vitest against `OUTBRIEF_TEST_DATABASE_URL` (must be a `*_test` database; the tests truncate it) |
 | `pnpm db:migrate` | Apply migrations that have not run |
+| `pnpm dev` | Run the server and restart it when the code changes |
 | `pnpm start` | Run the server |
 
 ## License
