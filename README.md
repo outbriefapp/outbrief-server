@@ -129,17 +129,38 @@ OUTBRIEF_DATABASE_URL='mysql://USER:PASSWORD@HOST:3306/outbrief' PORT=8787 pnpm 
 
 ## 本地开发
 
-需要 Node ≥ 22.18、pnpm 9、本机 MySQL 8（docker 容器 `some-mysql`）。
+需要 Node ≥ 22.18、pnpm 9、Docker。数据库是本机一个 MySQL 8 容器，名字必须是 `some-mysql`，并且把容器的 3306 发布到本机 3306。默认连接串是 `mysql://outbrief:outbrief_local@127.0.0.1:3306/outbrief`，换端口就对不上。下面的命令和 outbrief-app 的 `pnpm dev:all` 都只按这个名字找容器，不会自己创建。
+
+第一次先建容器。镜像和 Railway 一样用 `mysql:8.4`。`MYSQL_ROOT_PASSWORD` 只给这台机器的 root 用，生产不用它。
+
+```bash
+docker run -d \
+  --name some-mysql \
+  --restart unless-stopped \
+  -e MYSQL_ROOT_PASSWORD='local-root-password' \
+  -p 3306:3306 \
+  mysql:8.4
+```
+
+等它能应答。这一步不需要口令：
+
+```bash
+until docker exec some-mysql mysqladmin ping -h127.0.0.1 --silent; do sleep 1; done
+```
+
+然后：
 
 ```bash
 pnpm install
-# 1. 建库和账号（只需一次，root 执行）
+# 1. 建库和账号（只需一次）。提示输入口令时，填上面的 MYSQL_ROOT_PASSWORD
 docker exec -i some-mysql mysql -uroot -p < db/bootstrap.sql
 # 2. 建表（服务启动时也会自动执行）
 pnpm db:migrate
 # 3. 启动；还没有账号时日志里会打印认领码
 pnpm dev
 ```
+
+`db/bootstrap.sql` 会建 `outbrief`、`outbrief_test` 和用户 `outbrief`，口令是 `outbrief_local`，只给本机用。容器已经在就不要再 `docker run`；停着的话用 `docker start some-mysql`。本机 3306 被占用时，先停掉占用它的进程再创建容器。
 
 表结构只在 `db/migrations/NNN_*.sql` 里定义，按文件名顺序执行一次，已执行的版本记录在 `schema_migrations`。新增表或字段时新建一个迁移文件，不要改已执行过的文件。
 
@@ -151,6 +172,8 @@ pnpm dev
 | `pnpm typecheck` | `tsc` |
 | `pnpm test` | Vitest；连接 `OUTBRIEF_TEST_DATABASE_URL`（必须是 `*_test` 库，测试会清空表） |
 | `pnpm db:migrate` | 执行未执行的迁移 |
+| `pnpm dev` | 开发时启动，改代码自动重启 |
+| `pnpm start` | 启动服务 |
 
 ## License
 
