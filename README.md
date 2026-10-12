@@ -16,12 +16,12 @@ OutBrief 由三个仓库组成，本地统一放在 `~/work/code/outbrief/`：
 
 ## 安装顺序
 
-来电只在同一个匿名账号里转发。推荐让跑 Agent 的那台电脑上的 daemon 创建账号，桌面 App 和手机 App 都加入这个账号。
+来电只在同一个匿名账号里转发。推荐让跑 Agent 的那台电脑上的 daemon 创建账号，桌面 App 和手机 App 都加入这个账号。已经有服务器时（例如 `https://api.outbriefapp.com`），从第 2 步开始，daemon 和 App 都填这个地址。注册关闭时不能自己建账号，用主人给出的配对码加入。
 
 1. **部署本仓库（server）**。只跑一个进程。私有化部署（默认）在还没有主人时，每次启动的日志里打印一次性认领码 `Claim code: XXXX-XXXX-XXXX`。记下服务地址。手机和别的电脑要能访问这个地址；`http://127.0.0.1:8787` 只有部署 server 的那台机器自己能用。给手机配对时，daemon 和 App 里填局域网 IP 或公网 `https://` 地址。命令见下方「部署」。
 2. **在跑 Agent 的电脑上安装 [outbrief-daemon](https://github.com/outbriefapp/outbrief-daemon)**。`pnpm install` 之后执行 `node src/cli.ts login --server <服务地址>`，输入认领码。终端打出二维码和 6 位配对码。macOS 上接着执行 `node src/cli.ts install`（开机自启，并写入 Claude Code / Codex 的 Stop hook）。`install` 把 node 和 `src/cli.ts` 的绝对路径写进 launchd，仓库留在原地。
 3. **在同一台电脑上安装桌面 App（[outbrief-app](https://github.com/outbriefapp/outbrief-app)）**。`pnpm tauri build`，安装包在 `src-tauri/target/release/bundle/`。开发时用 `pnpm tauri dev`。daemon 已经在运行时，桌面端第一次打开会自动加入这台 daemon 的账号。
-4. **安装手机 App**。同一仓库，Android / iOS 工程在本机生成后再编译：`pnpm tauri android init`，然后 `pnpm tauri android dev` 或 `pnpm tauri android build`；iOS 用 `pnpm tauri ios init`，然后 `pnpm tauri ios dev` 或 `pnpm tauri ios build`。需要 [Tauri 的移动端环境](https://tauri.app/start/prerequisites/)。仓库里没有应用商店安装包。打开已配对设备的「设置 → 设备 → 添加设备」，或在电脑上执行 `node src/cli.ts pair`，用手机摄像头扫二维码。
+4. **安装手机 App（[outbrief-app](https://github.com/outbriefapp/outbrief-app)，和桌面 App 同一个仓库）**。可安装的 Android 包在那个仓库里执行 `scripts/build-android.sh`，产物是 `dist-android/OutBrief.apk`。来电推送由这个脚本打进包里。开发调试用 `pnpm tauri android dev` 或 `pnpm tauri android build` 时，要先 `export OUTBRIEF_FIREBASE_CONFIG=<google-services.json>`，否则包里没有推送。指向 `https://api.outbriefapp.com` 的安装包，必须用那台服务器所属的 Firebase 项目打包；自己另建的项目收不到它的推送，这个项目的 `google-services.json` 不在仓库里。iOS 用 `pnpm tauri ios init`，然后 `pnpm tauri ios dev` 或 `pnpm tauri ios build`；这一版没有来电推送。需要 [Tauri 的移动端环境](https://tauri.app/start/prerequisites/)。仓库里没有应用商店安装包。装好后按 outbrief-app README 的「手机在后台或锁屏时响铃」打开后台来电、通知、锁屏来电界面、来电弹出界面，电池选不受限制，并确认「推送唤醒」是已开启。配对：已配对设备打开「设置 → 设备 → 添加设备」，或在跑 daemon 的电脑上执行 `node src/cli.ts pair`，用手机摄像头扫二维码。
 
 ### 配对
 
@@ -93,7 +93,7 @@ OutBrief 由三个仓库组成，本地统一放在 `~/work/code/outbrief/`：
 - 来电写库的同一个事务里，给本账号每台登记了 FCM 令牌的设备排一条推送（`push_jobs`），提交后马上发；server 在两步之间重启也不会丢。
 - 推送里没有内容，只有来电的 id、`seq` 和收到时间；手机拿到后用自己的令牌取密文，在本机解密、响铃。
 - 手机知道这通来电后回一个回执（`/v1/events/:id/receipt`）。没有回执就每 10 秒再推一次，最多 3 次；来电被接起、结束，或者过了 2 分钟的响铃窗口就不再推。
-- 推送用 Firebase Cloud Messaging，要 Android App 用同一个 Firebase 项目打包（见 outbrief-app 的 README）。
+- 推送用 Firebase Cloud Messaging，要 Android App 用同一个 Firebase 项目打包。打包和装好之后怎么确认，见 outbrief-app README 的「Android 安装包」和「手机在后台或锁屏时响铃」。
 
 ### 服务端留下什么
 
