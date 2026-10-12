@@ -1,17 +1,7 @@
-# outbrief-server
+# outbrief-server（已迁移）
 
-[中文](README.md)
+> **代码已经迁移到 [outbriefapp/outbrief](https://github.com/outbriefapp/outbrief) 的 `server/` 目录**，提交历史一并保留。请到那里查看代码、提 issue 和 PR，也欢迎在那里点 ⭐ Star。这个仓库已归档，只读保留。
+>
+> **Moved to [outbriefapp/outbrief](https://github.com/outbriefapp/outbrief) (`server/`)**, history included. This repository is archived.
 
-OutBrief server. It only relays: it takes encrypted reports from outbrief-daemon, rings the clients, and queues their encrypted replies back to the daemon. The server has no key and cannot read reports, briefs, or replies. There is no login; accounts are anonymous and devices join with a pairing code.
-
-Docs, install steps, and design decisions are on the website: **<https://outbriefapp.com/en/>**
-
-Questions, feedback, and ideas: join us on [Discord](https://discord.gg/TG8qHzdv6).
-
-- [Self-host the server (deploy, environment, local development)](https://outbriefapp.com/en/docs/server/)
-- [Quick start (install order and pairing)](https://outbriefapp.com/en/docs/quick-start/)
-- [Architecture decisions (ADR, Chinese)](https://outbriefapp.com/en/docs/adr/)
-
-## License
-
-[OutBrief License](LICENSE) (Apache License 2.0 plus extra terms, following the [Multica License](https://github.com/multica-ai/multica/blob/main/LICENSE)).
+使用文档：<https://outbriefapp.com>
