@@ -356,6 +356,50 @@ export const DELIVERY_EVENT_NAME = "event-delivery";
 export const REPLY_TTL_MS = 24 * 60 * 60 * 1000;
 
 // ---------------------------------------------------------------------------------------------
+// Push (ADR 0010). A call wakes each phone of the account with a push that carries no content,
+// only which call it is; the phone fetches the sealed call and rings. It then sends a receipt, and
+// the server pushes again until it has one or the call can no longer ring.
+// ---------------------------------------------------------------------------------------------
+
+/**
+ * How long after the server received a call it may still ring; a device that hears of it later
+ * lists it as missed. The app's `RING_WINDOW_MS` (src/call/answered.ts) is the same.
+ */
+export const RING_WINDOW_MS = 2 * 60_000;
+
+/** `fcm` = Firebase Cloud Messaging (Android). */
+export const PushProvider = z.enum(["fcm"]);
+export type PushProvider = z.infer<typeof PushProvider>;
+
+/**
+ * `PUT /v1/devices/me/push` → 204: where to push this device; `DELETE` → 204 stops it. 409
+ * `push_unavailable` when this server has no credentials for the provider.
+ */
+export const SetPushTokenInput = z.object({
+  provider: PushProvider,
+  token: z.string().trim().min(1).max(512),
+});
+export type SetPushTokenInput = z.infer<typeof SetPushTokenInput>;
+
+export const PUSH_UNAVAILABLE = "push_unavailable";
+
+/**
+ * `POST /v1/events/:id/receipt` → 204: this device heard of the call, by push or on its stream,
+ * whether it rang or became a missed call. Pushes to it stop.
+ */
+export const CallReceiptInput = z.object({ via: z.enum(["push", "stream"]) });
+export type CallReceiptInput = z.infer<typeof CallReceiptInput>;
+
+/** The `data` of a call push (all strings, as FCM requires). */
+export interface CallPushData {
+  [key: string]: string;
+  type: "call";
+  eventId: string;
+  seq: string;
+  receivedAt: string;
+}
+
+// ---------------------------------------------------------------------------------------------
 // Accounts and devices (YOUT-217). There is no login: an account is an anonymous id, and every
 // device (app, phone, outbrief-daemon) holds its own revocable bearer token. The first device
 // creates the account (`POST /v1/accounts`); the others join it with a one-time pairing code.
@@ -384,6 +428,8 @@ export type SignupMode = z.infer<typeof SignupMode>;
 
 export interface ServerInfo {
   signup: SignupMode;
+  /** Push providers this server can wake devices with; empty: calls reach a device on its stream only. */
+  push: PushProvider[];
 }
 
 /** `POST /v1/accounts` (no bearer): creates an account and its first device. */

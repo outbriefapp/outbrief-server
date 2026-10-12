@@ -67,6 +67,7 @@ Nothing is required. The process starts with no `.env`. [`.env.example`](.env.ex
 | `OUTBRIEF_DATABASE_URL` | `mysql://outbrief:outbrief_local@127.0.0.1:3306/outbrief` | Injected by the platform. The default is the local docker database `outbrief` |
 | `PORT` | `8787` | Listen port |
 | `OUTBRIEF_OPEN_SIGNUP` | `false` | `true`: anyone may create an account (public server, rate limited). `false`: the first account needs the claim code from the log, then signup closes |
+| `OUTBRIEF_FCM_SERVICE_ACCOUNT` | unset | Call pushes (ADR 0010). The key of a Firebase project service account: the whole JSON file (a platform variable), or the path to the file. Unset: no pushes, and a phone gets calls only while it holds its event stream. Set but unreadable: the server does not start. Keep the key out of the repository |
 | `OUTBRIEF_TEST_DATABASE_URL` | `…/outbrief_test` | Test database. The name must end in `_test` |
 
 ### Railway
@@ -74,9 +75,13 @@ Nothing is required. The process starts with no `.env`. [`.env.example`](.env.ex
 [`railway.json`](railway.json) sets the health check and the restart policy. The rest is configured in Railway:
 
 - Add a MySQL 8 service (image `mysql:8.4`, volume on `/var/lib/mysql`). Private network only. Leave the public TCP proxy off.
-- On the server service, set `OUTBRIEF_DATABASE_URL` to the MySQL service's `MYSQL_URL` (`${{MySQL.MYSQL_URL}}`). Keep that connection string out of the repo and out of docs. Set `PORT=8787`.
+- On the server service, set `OUTBRIEF_DATABASE_URL` to the MySQL service's `MYSQL_URL` (`${{MySQL.MYSQL_URL}}`). Keep that connection string out of the repo and out of docs. Set `PORT=8787`. To push calls, paste the whole service account key file of the Firebase project into `OUTBRIEF_FCM_SERVICE_ACCOUNT`.
 - One replica. Attach a volume to the server (for example `/data`; the code does not read or write it). Railway then stops the old deployment before starting the new one, and it will not scale past one replica.
 - Add the CNAME and `_railway-verify` TXT records Railway shows. With Cloudflare, use DNS only (grey cloud) until Railway has issued the certificate.
+
+### Call pushes
+
+A phone off its event stream (app swiped away, phone asleep, between networks) is woken by a push ([ADR 0010](docs/adr/0010-wake-phones-with-push.md)). The push is queued in the transaction that stores the call, for every device of the account that registered an FCM token, and sent once that commits. It carries no content, only the call's id, `seq` and arrival time: the phone fetches the ciphertext with its own token and decrypts it. The phone then sends a receipt (`POST /v1/events/:id/receipt`). Without one the server pushes again every 10 seconds, at most 3 times, and stops once the call is taken or ended, or after the 2-minute ring window. The Android app has to be built with the same Firebase project (see the outbrief-app README). The server keeps the FCM token of each phone, and the time and result of each push and receipt for a day.
 
 ### Local development
 

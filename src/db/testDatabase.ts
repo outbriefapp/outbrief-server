@@ -23,6 +23,9 @@ export async function resetTables(pool: Pool): Promise<void> {
   try {
     await conn.query("SET FOREIGN_KEY_CHECKS = 0");
     for (const table of [
+      "push_jobs",
+      "call_receipts",
+      "device_push_tokens",
       "daemon_replies",
       "multica_reports",
       "agent_events",

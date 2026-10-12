@@ -36,7 +36,7 @@ it("applies each migration once and drops retired tables", async () => {
   const url = testDatabaseUrl();
   const conn = await createConnection({ uri: url });
   await conn.query(
-    "DROP TABLE IF EXISTS sessions, users, daemon_replies, pairing_codes, machines, devices, multica_reports, briefs, tts_usage, agent_events, accounts, schema_migrations",
+    "DROP TABLE IF EXISTS push_jobs, call_receipts, device_push_tokens, sessions, users, daemon_replies, pairing_codes, machines, devices, multica_reports, briefs, tts_usage, agent_events, accounts, schema_migrations",
   );
   await conn.end();
 
@@ -49,15 +49,19 @@ it("applies each migration once and drops retired tables", async () => {
     "011_drop_retired_tables",
     "012_accounts_and_devices",
     "013_call_handled_by",
+    "014_push",
   ]);
   expect(await migrate(url)).toEqual([]);
   expect(await tableNames(url)).toEqual([
     "accounts",
     "agent_events",
+    "call_receipts",
     "daemon_replies",
+    "device_push_tokens",
     "devices",
     "multica_reports",
     "pairing_codes",
+    "push_jobs",
     "schema_migrations",
   ]);
   // A fresh database has nothing to own, so no default account: the server starts unclaimed.
@@ -94,7 +98,7 @@ it("moves the data from before accounts into one default account, keeping machin
   const url = testDatabaseUrl();
   const conn = await createConnection({ uri: url, multipleStatements: true });
   await conn.query(
-    "DROP TABLE IF EXISTS daemon_replies, pairing_codes, machines, devices, multica_reports, agent_events, accounts, schema_migrations",
+    "DROP TABLE IF EXISTS push_jobs, call_receipts, device_push_tokens, daemon_replies, pairing_codes, machines, devices, multica_reports, agent_events, accounts, schema_migrations",
   );
   await conn.end();
 
@@ -120,7 +124,11 @@ it("moves the data from before accounts into one default account, keeping machin
   `);
   await old.end();
 
-  expect(await migrate(url)).toEqual(["012_accounts_and_devices", "013_call_handled_by"]);
+  expect(await migrate(url)).toEqual([
+    "012_accounts_and_devices",
+    "013_call_handled_by",
+    "014_push",
+  ]);
 
   const check = await createConnection({ uri: url });
   try {

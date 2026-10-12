@@ -8,15 +8,23 @@ import { createApp, type Limits } from "../app.ts";
 import { DaemonGateway } from "../daemon/gateway.ts";
 import { EventStore } from "../eventStore.ts";
 import type { DeviceKind, DeviceSession } from "../protocol.ts";
+import { type PushSender, PushService } from "../push/push.ts";
 
 /** Test-only: the server wired as `main.ts` does, over the test pool. */
 export function buildServer(
   pool: Pool,
-  options: { openSignup?: boolean; heartbeatMs?: number; limits?: Partial<Limits> } = {},
+  options: {
+    openSignup?: boolean;
+    heartbeatMs?: number;
+    limits?: Partial<Limits>;
+    pushSenders?: PushSender[];
+  } = {},
 ) {
   const store = new EventStore(pool);
   const gateway = new DaemonGateway(store);
   store.usePresence(gateway);
+  const push = new PushService(pool, options.pushSenders);
+  store.usePusher(push);
   const devices = new DeviceStore(pool);
   const accounts = new AccountStore(pool, devices, { openSignup: options.openSignup ?? true });
   const app = createApp({
@@ -24,9 +32,10 @@ export function buildServer(
     accounts: { accounts, devices, pairing: new PairingStore(pool, devices) },
     heartbeatMs: options.heartbeatMs ?? 20,
     daemon: { gateway, upgradeWebSocket },
+    push,
     ...(options.limits ? { limits: options.limits } : {}),
   });
-  return { app, store, gateway, accounts };
+  return { app, store, gateway, accounts, push };
 }
 
 type Fetcher = (path: string, init?: RequestInit) => Response | Promise<Response>;

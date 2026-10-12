@@ -18,6 +18,7 @@
   },
   "dependencies": {
     "@hono/node-server": "^2.1.1",
+    "firebase-admin": "^13.10.0",
     "hono": "^4.13.9",
     "mysql2": "^3.24.4",
     "ws": "8.22.0",
