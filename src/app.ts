@@ -14,17 +14,21 @@ import type { CallChange, EventStore } from "./eventStore.ts";
 import {
   type AgentEvent,
   CALL_STATUS_EVENT_NAME,
+  CallReceiptInput,
   CreateAccountInput,
   DELIVERY_EVENT_NAME,
   MulticaReportInput,
   PairingCodeText,
+  PUSH_UNAVAILABLE,
   RedeemPairingInput,
   ReportSubmission,
   SendReplyInput,
+  SetPushTokenInput,
   SettingsRelayInput,
   STREAM_EVENT_NAME,
   UpdateEventStatusInput,
 } from "./protocol.ts";
+import type { PushService } from "./push/push.ts";
 
 /** 200 with the event, 404, or 409 with why this device may not answer or end the call. */
 function callChangeResponse(c: Context, change: CallChange): Response {
@@ -41,6 +45,8 @@ export interface AppDeps {
   heartbeatMs?: number;
   /** outbrief-daemon support: live daemon connections and the WebSocket adapter. */
   daemon: DaemonDeps;
+  /** Wakes phones for a new call (ADR 0010). */
+  push: PushService;
   /** Overrides for tests; the defaults suit a server on the internet. */
   limits?: Partial<Limits>;
 }
@@ -134,6 +140,7 @@ export function createApp({
   accounts: { accounts, devices, pairing },
   heartbeatMs = 25_000,
   daemon,
+  push,
   limits: limitOverrides,
 }: AppDeps): Hono<Env> {
   const app = new Hono<Env>();
@@ -159,8 +166,13 @@ export function createApp({
 
   // --- No bearer: creating an account, joining one ---------------------------------------------
 
-  /** Whether this server takes new accounts, needs its claim code, or only pairing codes. */
-  app.get("/v1/server", async (c) => c.json({ signup: await accounts.signupMode() }));
+  /**
+   * Whether this server takes new accounts, needs its claim code, or only pairing codes; and which
+   * push providers it wakes phones with.
+   */
+  app.get("/v1/server", async (c) =>
+    c.json({ signup: await accounts.signupMode(), push: push.providers }),
+  );
 
   /**
    * Creates an anonymous account and its first device. Open signup is rate limited per address;
@@ -289,6 +301,25 @@ export function createApp({
     return status ? c.json(status) : c.json({ error: "not_found" }, 404);
   });
 
+  /**
+   * Where to push this device when a call comes in (ADR 0010). 409 `push_unavailable`: this server
+   * has no credentials for the provider, and calls reach the device only on its stream.
+   */
+  app.put("/v1/devices/me/push", async (c) => {
+    const parsed = SetPushTokenInput.safeParse(await c.req.json().catch(() => undefined));
+    if (!parsed.success) {
+      return c.json({ error: "invalid_push_token", issues: parsed.error.issues }, 400);
+    }
+    const ok = await push.setToken(c.get("device").id, parsed.data.provider, parsed.data.token);
+    return ok ? c.body(null, 204) : c.json({ error: PUSH_UNAVAILABLE }, 409);
+  });
+
+  /** This device is no longer pushed (background calls switched off). */
+  app.delete("/v1/devices/me/push", async (c) => {
+    await push.clearToken(c.get("device").id);
+    return c.body(null, 204);
+  });
+
   app.get("/v1/devices", async (c) => {
     const me = c.get("device");
     return c.json({ devices: await devices.list(me.accountId, presence, me.id) });
@@ -302,6 +333,7 @@ export function createApp({
     }
     daemon.gateway.disconnect(id);
     streams.closeAll(id);
+    await push.clearToken(id);
     return c.body(null, 204);
   });
 
@@ -349,6 +381,25 @@ export function createApp({
       ),
     }),
   );
+
+  /** One call of the account, as the stream delivers it: what a push tells a phone to fetch. */
+  app.get("/v1/events/:id", async (c) => {
+    const event = await store.get(c.req.param("id"), c.get("device").accountId);
+    return event ? c.json(event) : c.json({ error: "not_found" }, 404);
+  });
+
+  /** This device heard of the call, by push or on its stream: it is not pushed again. */
+  app.post("/v1/events/:id/receipt", async (c) => {
+    const parsed = CallReceiptInput.safeParse(await c.req.json().catch(() => undefined));
+    if (!parsed.success) {
+      return c.json({ error: "invalid_receipt", issues: parsed.error.issues }, 400);
+    }
+    const me = c.get("device");
+    const event = await store.get(c.req.param("id"), me.accountId);
+    if (!event) return c.json({ error: "not_found" }, 404);
+    await push.recordReceipt(event.id, me.id, parsed.data.via);
+    return c.body(null, 204);
+  });
 
   app.post("/v1/events/:id/status", async (c) => {
     const parsed = UpdateEventStatusInput.safeParse(await c.req.json().catch(() => undefined));

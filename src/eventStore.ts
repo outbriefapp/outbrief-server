@@ -53,6 +53,14 @@ export interface Presence {
   isOnline(machineId: string): boolean;
 }
 
+/** Wakes the account's devices for a new call (the push service). */
+export interface CallPusher {
+  /** Queues the call's pushes in the transaction that stores it. */
+  enqueue(conn: PoolConnection, eventId: string, accountId: string, now: Date): Promise<void>;
+  /** The transaction committed: send what it queued. */
+  kick(): void;
+}
+
 /** A reply the gateway should hand to a daemon. */
 export interface PendingReply {
   id: string;
@@ -186,6 +194,7 @@ export class EventStore {
   readonly #callStatusListeners = new Set<Subscription>();
   #inserting: Promise<void> = Promise.resolve();
   #presence: Presence = NOBODY_ONLINE;
+  #pusher: CallPusher | undefined;
 
   constructor(pool: Pool) {
     this.#pool = pool;
@@ -194,6 +203,11 @@ export class EventStore {
   /** Where `machine.online` comes from; the daemon gateway registers itself here. */
   usePresence(presence: Presence): void {
     this.#presence = presence;
+  }
+
+  /** Who wakes the account's phones for a new call (ADR 0010); none: they hear of it on their stream. */
+  usePusher(pusher: CallPusher): void {
+    this.#pusher = pusher;
   }
 
   /**
@@ -206,7 +220,7 @@ export class EventStore {
     now = new Date(),
     machineId: string | null = null,
   ): Promise<AgentEvent> {
-    return this.#insert(accountId, async (conn, id) => {
+    return this.#insert(accountId, now, async (conn, id) => {
       await insertEvent(conn, id, accountId, report, now, machineId);
       return true;
     }) as Promise<AgentEvent>;
@@ -224,7 +238,7 @@ export class EventStore {
     machineId: string,
     now = new Date(),
   ): Promise<AgentEvent | null> {
-    return this.#insert(accountId, async (conn, id) => {
+    return this.#insert(accountId, now, async (conn, id) => {
       await insertEvent(conn, id, accountId, { ...report, source: "multica" }, now, machineId);
       try {
         await conn.execute(
@@ -243,9 +257,11 @@ export class EventStore {
    * Runs `write` in a transaction and fans the new event out to stream subscribers. Inserts run one
    * at a time, so events commit and reach subscribers in ascending seq order (a stream skips any
    * seq at or below the last one it sent). `write` resolves false to roll back and return null.
+   * The call's pushes are queued in the same transaction and sent once it commits.
    */
   #insert(
     accountId: string,
+    now: Date,
     write: (conn: PoolConnection, id: string) => Promise<boolean>,
   ): Promise<AgentEvent | null> {
     const run = this.#inserting.then(async () => {
@@ -257,6 +273,7 @@ export class EventStore {
           await conn.rollback();
           return null;
         }
+        await this.#pusher?.enqueue(conn, id, accountId, now);
         await conn.commit();
       } catch (err) {
         await conn.rollback();
@@ -266,6 +283,7 @@ export class EventStore {
       }
       const event = await this.get(id);
       if (!event) throw new Error(`agent_events row ${id} vanished right after insert`);
+      this.#pusher?.kick();
       for (const sub of this.#listeners) if (sub.accountId === accountId) sub.listener(event);
       return event;
     });

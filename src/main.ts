@@ -9,6 +9,8 @@ import { DaemonGateway } from "./daemon/gateway.ts";
 import { migrate } from "./db/migrate.ts";
 import { openPool } from "./db/pool.ts";
 import { EventStore } from "./eventStore.ts";
+import { FcmSender } from "./push/fcm.ts";
+import { PushService } from "./push/push.ts";
 
 const config = loadConfig();
 const applied = await migrate(config.databaseUrl);
@@ -18,6 +20,12 @@ const pool = openPool(config.databaseUrl);
 const store = new EventStore(pool);
 const gateway = new DaemonGateway(store);
 store.usePresence(gateway);
+const push = new PushService(
+  pool,
+  config.fcmServiceAccount ? [new FcmSender(config.fcmServiceAccount)] : [],
+);
+store.usePusher(push);
+push.start();
 const devices = new DeviceStore(pool);
 const accounts = new AccountStore(pool, devices, { openSignup: config.openSignup });
 const pairing = new PairingStore(pool, devices);
@@ -26,6 +34,7 @@ const app = createApp({
   store,
   accounts: { accounts, devices, pairing },
   daemon: { gateway, upgradeWebSocket },
+  push,
 });
 
 // A private server is claimed by whoever has its log: the first account needs this code.
@@ -47,6 +56,9 @@ if (claimCode) {
 } else {
   console.log(`signup: ${config.openSignup ? "open" : "closed (join with a pairing code)"}`);
 }
+console.log(
+  `push: ${push.providers.length ? push.providers.join(", ") : "off (OUTBRIEF_FCM_SERVICE_ACCOUNT not set)"}`,
+);
 const server = serve(
   {
     fetch: app.fetch,
@@ -61,11 +73,13 @@ const server = serve(
 // Replies left `queued` past their expiry fail (the machine stayed offline).
 const expiry = setInterval(() => {
   store.expireReplies().catch((err) => console.error("[daemon-replies] expiry failed", err));
+  push.prune().catch((err) => console.error("[push] prune failed", err));
 }, 60_000);
 
 for (const signal of ["SIGINT", "SIGTERM"] as const) {
   process.once(signal, async () => {
     clearInterval(expiry);
+    push.stop();
     gateway.closeAll();
     server.close();
     store.close();
