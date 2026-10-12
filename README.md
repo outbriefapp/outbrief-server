@@ -6,6 +6,8 @@ OutBrief 服务端：只做中转。接收 outbrief-daemon 加密好的汇报，
 
 使用文档、安装步骤和架构决策都在官网：**<https://outbriefapp.com>**
 
+问题、反馈和建议，欢迎来 [Discord](https://discord.gg/TG8qHzdv6) 交流。
+
 - [Server 自部署（部署、环境变量、本地开发）](https://outbriefapp.com/docs/server/)
 - [快速开始（安装顺序与设备配对）](https://outbriefapp.com/docs/quick-start/)
 - [架构决策记录（ADR）](https://outbriefapp.com/docs/adr/)

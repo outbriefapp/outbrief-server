@@ -6,6 +6,8 @@ OutBrief server. It only relays: it takes encrypted reports from outbrief-daemon
 
 Docs, install steps, and design decisions are on the website: **<https://outbriefapp.com/en/>**
 
+Questions, feedback, and ideas: join us on [Discord](https://discord.gg/TG8qHzdv6).
+
 - [Self-host the server (deploy, environment, local development)](https://outbriefapp.com/en/docs/server/)
 - [Quick start (install order and pairing)](https://outbriefapp.com/en/docs/quick-start/)
 - [Architecture decisions (ADR, Chinese)](https://outbriefapp.com/en/docs/adr/)
